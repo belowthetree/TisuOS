@@ -1,0 +1,4 @@
+{
+    "rust.target": "thumbv7em-none-eabihf",
+    "rust.all_targets": false
+}
