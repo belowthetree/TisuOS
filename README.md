@@ -12,6 +12,10 @@ gitee 地址：https://gitee.com/belowthetree/tisu-os
 * riscv64-unknown-linux-gnu-gcc
 * rust-nightly
 
+指令：`make all`
+
+注意：GitHub 版本没有硬盘镜像，需要自己创建一个 FAT32 格式的硬盘镜像
+
 ## 运行：
 
 * QEMU-system-riscv64
