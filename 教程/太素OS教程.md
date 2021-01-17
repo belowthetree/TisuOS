@@ -938,3 +938,442 @@ pub fn map(&mut self, virtual_addr : usize, physic_addr : usize, flag : u64){
 ```
 
 上述代码就是重复三次映射的过程，向内存管理器申请内存放置页表项
+
+## 第六章-同步
+
+同步其实是针对进程的。解决这样的一个情况：当进程一对一个全局变量进行修改的时候刚切换到了下一个进程，下一个进程又对这个全局变量进行了修改。假如这个变量是个指针，原本进程一想用它修改地址 0x100，结果进程二把它改成了 0x200，那么最终进程一就会修改 0x200 处的内容。
+
+进程同步的原则就是让进程读取、修改某些变量时其它进程暂时无法访问，相当于下边的逻辑
+
+```rust
+let lock = false;
+let a = 0;
+while lock {}
+lock = true;
+a = 1;
+lock = false;
+```
+
+当然，上边的代码只是举个例子，这个代码无法真正实现同步，因为无法保证在修改 `lock` 前其它进程不会读取 `lock` 
+
+这里就要使用汇编中的原子操作了。**原子表示内存读写之间的过程不会被打断，内存值也不会被其它处理器核心修改**。
+
+这里同样借鉴史蒂芬老哥的，不过在这个的基础上我扩展了一下
+
+```rust
+pub enum MutexState{
+    Unlock = 0,
+    Lock = 1,
+}
+/// ## 多重锁
+/// 多重锁，允许一个核心多次上锁，这是为了解决单重锁在多重函数中反复上锁的需求
+pub struct MultiMutex {
+    mutex : Mutex,
+    cnt : usize,
+    hartid : usize,
+}
+/// ## 单重锁
+/// 单次锁，仅仅针对简单的同步要求
+pub struct Mutex{
+    state : MutexState,
+}
+/// ## 读写锁
+/// 允许多个读取，一个写入
+pub struct ReadWriteMutex{
+    mutex : Mutex,
+    read_cnt : usize,
+    write : bool,
+}
+```
+
+原理很简单，利用 `RISCV` 中的原子交换，读取的同时进行赋值，这样第一个进行 `lock` 操作的进程必定能够读取到 `unlock`，后续的便会得到 `lock`，而得到 `unlock` 的进程继续执行，得到 `lock` 的进程阻塞在循环中
+
+```rust
+pub fn lock(&mut self) {
+    while !self.lock_state() {}
+}
+pub fn unlock(&mut self){
+    unsafe {
+        let state = &mut self.state;
+        asm!("amoswap.w.rl zero, zero, ($0)" :: "r"(state) :: "volatile");
+    }
+}
+fn lock_state(&mut self) ->bool {
+    unsafe {
+        let state : MutexState;
+        asm!("amoswap.w.aq $0, $1, ($2)\n" : "=r"(state) : "r"(1), "r"(self) :: "volatile");
+        match state {
+            MutexState::Lock => {false}
+            MutexState::Unlock => {true}
+        }
+    }
+}
+```
+
+## 第七章-任务系统
+
+> 在本项目中，进程、线程的概念可能不同于一般意义或者说其它系统，这是按照个人理解制作的
+
+多个轮流切换使得我们可以同时运行很多程序，这种系统通常称之为分时系统。分时系统还有个好处是我们可以不用等待某些设备响应，转而去执行其它没有阻塞的任务。分时系统需要使用 `timer` 来进行触发。
+
+### Timer
+
+`Timer` 的基地址在 0x200_0000，在处理器启动后 `timer` 便开始计数，QEMU 提供的频率是 1000_0000 次每秒
+
+![](../图/CLINT_Timer.png)
+
+* `mtime`，可以获取 `timer` 当前计数
+* `mtimecmp`，设置下一个触发时间点，只要当前计数大于等于它，就会触发`timer`中断，可以直接写入
+
+```rust
+static FREQUENCY    : usize = 1000_0000;
+static MTIMECMP     : usize = 0x200_4000;
+static MTIME        : usize = 0x200_BFF8;
+static INTERVAL     : u64 = 15_0000;
+
+/// 设置下一个时间中断的间隔，单位是秒
+pub fn set_next_interrupt(seconds : usize){
+    unsafe {
+        let mtimecmp = MTIMECMP as *mut u64;
+        let mtime = MTIME as *mut u64;
+        mtimecmp.write_volatile(mtime.read_volatile() + (seconds * FREQUENCY) as u64);
+    }
+}
+```
+
+### 进程
+
+进程作为一个程序的存在标志，保存程序的页表、堆、状态等关键信息；`pid` 是进程号，`tid` 是进程下的线程号的集合。进程本身不参与调度。进程创建之后会初始化一个主线程，主线程代表进程的执行周期，主线程执行完毕进程就结束。
+
+这里多了一个堆链，考虑到之后有 `malloc` 调用的需求，所以增加了一个用户堆结构。用链表将所有用户申请的内存链接起来
+
+```rust
+pub struct Process{
+    pub satp : usize,
+    pub heap_list : *mut MemoryList,
+    pub state : ProcessState,
+    pub hartid : usize,
+    pub pid : usize,
+    pub tid : Vec<usize>,
+    pub is_kernel : bool,
+}
+```
+
+进程可以不断产生新的线程，新的线程根据进程的信息进程构造，避免重复进行页表映射
+
+```rust
+pub fn fork(&mut self, func : usize)->Result<(), ()>{
+    if let Some(thread) = create_thread(func, self){
+        self.tid.push(thread.tid);
+        Ok(())
+    }
+    else{
+        Err(())
+    }
+}
+```
+
+### 线程
+
+线程是具体的执行者。线程有自己的环境、状态、栈。目前线程的调度采用简单的轮转，每个线程分配固定的时间片。
+
+线程与进程都放在一个 `Vec` 中，所以将它移除的时候会触发一个 `Drop` 的 `Trait`。
+
+```rust
+impl Drop for Thread{
+    fn drop(&mut self) {
+        let stack_bottom = self.stack_top as usize - PAGE_SIZE * STACK_PAGE_NUM;
+        free_page(stack_bottom as *mut u8);
+        drop_thread(self.pid, self.tid);
+    }
+}
+```
+
+而调度方法也很简单，我们从中断那边过来，可以获取到环境信息，先将得到的环境放入线程的环境中，然后切换到下一个等待的线程。
+
+线程分为三种状态：
+
+* Running，表示正在运行
+* Sleeping，表示暂时不接受调度
+* Waiting，表示等待调度
+
+```rust
+pub struct Thread{
+    pub env : Environment,
+    pub state : ThreadState,
+    pub stack_top : *mut u8,
+    pub pid : usize,
+    pub tid : usize,
+    pub hartid : usize,
+    pub is_kernel : bool,
+}
+pub fn schedule(env : &Environment){
+    save_current(env);
+    switch_next();
+}
+fn save_current(env : &Environment){
+    unsafe {
+        THREAD_LOCK.lock();
+        if let Some(threads) = &mut THREAD_LIST{
+            let hartid = cpu::get_hartid();
+            for t in threads{
+                if t.state == ThreadState::Running && t.hartid == hartid {
+                    t.env.copy(env);
+                    break;
+                }
+            }
+        }
+        THREAD_LOCK.unlock();
+    }
+}
+
+fn switch_next(){
+    unsafe {
+        THREAD_LOCK.lock();
+        if let Some(threads) = &mut THREAD_LIST{
+            let hartid = cpu::get_hartid();
+            for (idx, t) in threads.iter_mut().enumerate(){
+                if t.state == ThreadState::Running && t.hartid == hartid {
+                    t.state = ThreadState::Waiting;
+                    threads.rotate_left(idx + 1);
+                    break;
+                }
+            }
+            for t in threads{
+                if t.state == ThreadState::Waiting {
+                    t.state = ThreadState::Running;
+                    t.hartid = hartid;
+                    (*ENVIRONMENT).copy(&t.env);
+                    let is_kernel = t.is_kernel;
+                    THREAD_LOCK.unlock();
+                    if is_kernel{
+                        switch_kernel_process(ENVIRONMENT as *mut u8);
+                    }
+                    else{
+                        switch_user_process(ENVIRONMENT as *mut u8);
+                    }
+                }
+            }
+        }
+        THREAD_LOCK.unlock();
+    }
+}
+```
+
+## 第八章-块设备
+
+### 知识预备
+
+> https://www.cnblogs.com/bakari/p/8309638.html
+>
+> https://chromitem-soc.readthedocs.io/en/latest/clint.html
+>
+> https://docs.oasis-open.org/virtio/virtio/v1.1/cs01/virtio-v1.1-cs01.pdf
+
+#### 映射
+
+QEMU 的源码里显示设备映射在 0x1000_1000，每个设备间隔 0x1000。
+
+![](../图/mmio.png)
+
+#### 初始化
+
+```rust
+#[repr(usize)]
+pub enum MmioOffsets {
+  MagicValue = 0x000,
+  Version = 0x004,
+  DeviceId = 0x008,
+  VendorId = 0x00c,
+  HostFeatures = 0x010,
+  HostFeaturesSel = 0x014,
+  GuestFeatures = 0x020,
+  GuestFeaturesSel = 0x024,
+  GuestPageSize = 0x028,
+  QueueSel = 0x030,
+  QueueNumMax = 0x034,
+  QueueNum = 0x038,
+  QueueAlign = 0x03c,
+  QueuePfn = 0x040,
+  QueueNotify = 0x050,
+  InterruptStatus = 0x060,
+  InterruptAck = 0x064,
+  Status = 0x070,
+  Config = 0x100,
+}
+```
+
+Device Status Field
+
+* Acknowledge(1)，OS 确认此设备
+* Driver(2)，OS 知道如何驱动
+* Failed（128），出错
+* Feature_OK（8），
+* Driver_OK（4）
+* Device Need Reset（64）
+
+初始化步骤：
+
+1. 重置设备.
+
+2. 在 status bit 中设置 ACKNOWLEDGE: 表示操作系统认识这个设备
+
+3. 在 status 设置 DRIVER.
+
+4. 读取 device feature bits, 写入 feature bits 的子集. During this step the driver MAY read (but MUST NOT write) the device-specific configurationfields to check that it can support the devicebefore accepting it.
+
+5. 设置 FEATURES_OK status bit. 之后不许设置新的 feature bit.
+
+6. 再次读取 device status 确保 FEATURES_OK bit 被设置，否则，说明设备不支持这个子集，设备不可用.
+
+7. 设置 Queue 的长度
+
+   1. ```rust
+      pub struct Queue {
+      	pub desc:  [Descriptor; VIRTIO_RING_SIZE],
+      	pub avail: Available,
+      	pub padding0: [u8; PAGE_SIZE - size_of::<Descriptor>() * VIRTIO_RING_SIZE - size_of::<Available>()],
+      	pub used:     Used,
+      }
+      pub struct Descriptor {
+      	pub addr:  u64,
+      	pub len:   u32,
+      	pub flags: u16,
+      	pub next:  u16,
+      }
+      ```
+
+8. 设置页面大小
+
+9. 设置 Queue 所在的页面号
+
+10. 设置 DRIVER_OK status bit. 这时设备可用.
+
+#### 控制
+
+设备控制通过 VirtIO。基本的操作是由系统维护一个或多个 `Queue`
+
+```rust
+pub struct Queue {
+	pub desc:  [Descriptor; VIRTIO_RING_SIZE],
+	pub avail: Available,
+	pub padding0: [u8; PAGE_SIZE - size_of::<Descriptor>() * VIRTIO_RING_SIZE - size_of::<Available>()],
+	pub used:     Used,
+}
+pub struct Descriptor {
+	pub addr:  u64,
+	pub len:   u32,
+	pub flags: u16,
+	pub next:  u16,
+}
+pub struct Request {
+	pub header: Header,
+	pub data:   Data, // *mut u8
+	pub status: Status, // u8
+}
+pub struct Header {
+	pub blktype:  u32,
+	pub reserved: u32,
+	pub sector:   usize,
+}
+
+pub struct Available {
+	pub flags: u16,
+	pub idx:   u16,
+	pub ring:  [u16; VIRTIO_RING_SIZE],
+	pub event: u16,
+}
+pub struct Used {
+	pub flags: u16,
+	pub idx:   u16,
+	pub ring:  [UsedElem; VIRTIO_RING_SIZE],
+	pub event: u16,
+}
+```
+
+`Queue` 有三个数组
+
+* `desc` 记录操作的地址，对于块设备而言，操作是由 `Request` 描述的，所以 `desc` 记录 `Request` 的地址。`Request` 需要几个必要信息
+
+  * `Header` 记录操作类型，比如：输入还是输出；操作目标扇区
+  * `Data` 就是一个地址，如果是写入磁盘，那么这个应该是待写入的数据地址；读取则是接收数据的地址
+  * `Status` 标志状态，一般初始是 111，磁盘操作完成后会修改这个值，告知操作结果
+  * 通常会把这三个信息放入三个 `desc` 中
+
+* `avail` 告诉磁盘应该读取哪个 `desc` 的信息，由系统操控
+
+  * `idx` 标志下一个待写入的 `ring` 的下标（是的，是下一个，而现在不是要读取的，估计磁盘是从 0 开始读取，遇到 idx 停止）
+  * `ring` 记录要读取的 `desc` 的下标
+
+* `used` 告诉系统读取了哪些 `desc`，由磁盘操控
+
+  * `idx` 记录下一个待写入的 `ring` 的下标，所以从头遍历到 `idx` 停止
+
+    * ```rust
+      let queue = &*self.queue;
+      while self.used_idx as u16 != queue.used.idx {
+          let ref elem = queue.used.ring[self.used_idx % VIRTIO_RING_SIZE];
+          self.used_idx = self.used_idx.wrapping_add(1);
+          // ....
+      }
+      ```
+
+  * `ring` 记录读取了哪些 `desc`
+
+当磁盘完成读写后会触发一个 `PLIC` 中断
+
+#### PLIC
+
+平台级中断控制，通过 MMIO 完成
+
+![](../图/PLIC-Pin.png)
+
+上图是 QEMU 源码截图，可以看到 `uart` 输入中断针脚号是 10，而设备的针脚号从 1 开始（也就是相对于 0x1000_0000 偏移了多少个 0x1000，如果你的设备挂载在 0x1000_2000，那么针脚号就是 2）
+
+PLIC 控制对应几个地址
+
+* `Enable` ：0x0c00_2000，想激活哪个针脚的中断就向这个地址写入哪个号码
+* `Priority`：0x0c00_0000，优先级，设置针脚的优先级，越高越先推送。设置方法是地址加上针脚偏移（32位），然后写入优先级，最高 7
+* `Threshold`：0x0c20_0000，阈值，优先级低于阈值的针脚中断会被屏蔽
+* `Claim` || `Complete`：0x0c20_0004，这个地址同时可以写入、读取，读取时得到的是当前待处理的中断针脚号，写入针脚号告知中断处理完毕，如果不写入告知，那么将不会有新的中断
+
+### 读写
+
+`Request` 的完整形态如下，上文为了说明我省略了
+
+```rust
+pub struct Request {
+	pub header: Header,
+	pub data:   Data,
+	pub status: Status,
+	pub waiter_pid : usize,
+	pub lock : sync::Mutex,
+}
+```
+
+* `waiter_pid` 是等待被唤醒的进程，用于异步，当读取完成后会通过中断唤醒该进程
+* `lock` 用于同步读写，读取的时候会上锁两次，第二次会阻塞，只有等中断发生后才会进行解锁
+
+### 缓冲
+
+在内核中通常使用同步读写，但是速度会比较慢，为了快速访问磁盘内容，其中一个办法是缓冲。预先读取一部分内容，这样就不用等待设备响应，当写入时也先写入到缓冲中，再一次性写到磁盘中。
+
+```rust
+pub struct Buffer{
+    mutex : ReadWriteMutex,
+    cnt : usize,
+    block_idx : usize,
+    idx : usize,
+    size : usize,
+    addr : *mut u8,
+    is_write : bool,
+}
+```
+
+* `mutex` 用于同步
+* `cnt` 标志优先级，每次操作某块缓冲区就会增加这个值，当需要更换缓冲区时优先卸载 `cnt` 较小的
+* `block_idx` 磁盘设备的下标
+* `idx` 对应磁盘的地址
+* `size` 缓冲区大小
+* `addr` 缓冲区所在的内存
+* `is_write` 是否发生了写入，有的话会在监控进程中将缓冲内容写入磁盘

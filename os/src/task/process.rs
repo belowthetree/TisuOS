@@ -30,7 +30,6 @@ impl PartialEq for ProcessState{
 /// pages 属于进程占用的物理页
 pub struct Process{
     pub satp : usize,
-    pub stack_top : *mut u8,
     pub heap_list : *mut MemoryList,
     pub state : ProcessState,
     pub hartid : usize,
@@ -44,22 +43,9 @@ impl Process {
     /// 内核或用户，传入的是虚拟地址，初始仅映射单页的代码页及全部栈页，堆页暂时不映射
     pub fn new(func : usize, is_kernel : bool) -> Option<Self> {
         let pid = unsafe {PID_CNT};
-        // 根据是否内核权限进行堆、栈内存申请
-        let stack_bottom;
-        if is_kernel {
-            stack_bottom = page::alloc_kernel_page(STACK_PAGE_NUM);
-        }
-        else {
-            stack_bottom = page::alloc_user_page(STACK_PAGE_NUM);
-        }
         let heap = MemoryList::new(HEAP_SIZE, is_kernel);
-        if stack_bottom.is_null() || heap.is_null(){
-            if !stack_bottom.is_null(){
-                page::free_page(stack_bottom);
-            }
-            if !heap.is_null(){
-                unsafe {(*heap).free(is_kernel);}
-            }
+        if heap.is_null(){
+            unsafe {(*heap).free(is_kernel);}
             None
         }
         //
@@ -76,35 +62,21 @@ impl Process {
                 // 代码、栈的映射
                 if !is_kernel{
                     (*pt).map_user(func as usize, func as usize);
-                    for i in 0..STACK_PAGE_NUM {
-                        let v = stack_bottom as usize + i * PAGE_SIZE;
-                        (*pt).map_user(v, v);
-                    }
                 }
                 else {
                     (*pt).map_kernel(func as usize, func as usize);
-                    for i in 0..STACK_PAGE_NUM {
-                        let v = stack_bottom as usize + i * PAGE_SIZE;
-                        (*pt).map_kernel(v, v);
-                    }
                 }
             }
-            let stack_top = (stack_bottom as usize) + STACK_PAGE_NUM * page::PAGE_SIZE;
-            let mut env = Environment::new();
-            // 设置进程返回地址，直接返回到 Process_exit 触发 exit 系统调用
-            env.regs[Register::RA.val()] = process_exit as usize;
             let satp = page_table::make_satp(pt as usize, 0);
             
-            env.init(func as usize, stack_top as usize, satp);
             unsafe {
                 PID_CNT = PID_CNT % PROCESS_NUM_MAX;
                 PID_CNT += 1;
             }
 
             let mut rt = Process{
-                    satp : env.satp,
+                    satp : satp,
                     pid : pid,
-                    stack_top : stack_top as *mut u8,
                     heap_list : heap,
                     state : ProcessState::Scheduling,
                     is_kernel : is_kernel,
@@ -123,21 +95,9 @@ impl Process {
     pub fn from_satp(func : usize, satp : usize, is_kernel : bool)->Option<Self>{
         let pid = unsafe {PID_CNT};
         // 根据是否内核权限进行堆、栈内存申请
-        let stack_bottom;
-        if is_kernel {
-            stack_bottom = page::alloc_kernel_page(STACK_PAGE_NUM);
-        }
-        else {
-            stack_bottom = page::alloc_user_page(STACK_PAGE_NUM);
-        }
         let heap = MemoryList::new(HEAP_SIZE, is_kernel);
-        if stack_bottom.is_null() || heap.is_null(){
-            if !stack_bottom.is_null(){
-                page::free_page(stack_bottom);
-            }
-            if !heap.is_null(){
-                unsafe {(*heap).free(is_kernel);}
-            }
+        if heap.is_null(){
+            unsafe {(*heap).free(is_kernel);}
             None
         }
         //
@@ -151,34 +111,15 @@ impl Process {
                 // 这一步极为重要，将内核中的一些函数（process_exit）进行映射
                 // 对于内核权限的进程而言，还需要获取整个内存的访问权限
                 page_table::map_kernel_area(&mut *pt, is_kernel);
-                // 代码、栈的映射
-                if !is_kernel{
-                    for i in 0..STACK_PAGE_NUM {
-                        let v = stack_bottom as usize + i * PAGE_SIZE;
-                        (*pt).map_user(v, v);
-                    }
-                }
-                else {
-                    for i in 0..STACK_PAGE_NUM {
-                        let v = stack_bottom as usize + i * PAGE_SIZE;
-                        (*pt).map_kernel(v, v);
-                    }
-                }
             }
-            let stack_top = (stack_bottom as usize) + STACK_PAGE_NUM * page::PAGE_SIZE;
-            let mut env = Environment::new();
-            // 设置进程返回地址，直接返回到 Process_exit 触发 exit 系统调用
-            env.regs[Register::RA.val()] = process_exit as usize;
             let satp = page_table::make_satp(pt as usize, 0);
-            env.init(func as usize, stack_top as usize, satp);
             unsafe {
                 PID_CNT = PID_CNT % PROCESS_NUM_MAX;
                 PID_CNT += 1;
             }
             let mut rt = Process{
-                satp : env.satp,
+                satp : satp,
                 pid : pid,
-                stack_top : stack_top as *mut u8,
                 heap_list : heap,
                 state : ProcessState::Scheduling,
                 is_kernel : is_kernel,
@@ -259,7 +200,6 @@ impl Process {
 impl Drop for Process{
     fn drop(&mut self) {
         // println!("free process {}", self.pid);
-        page::free_page((self.stack_top as usize - STACK_PAGE_NUM * PAGE_SIZE) as *mut u8);
         SATP::from(self.satp).free_page_table();
         unsafe {(*self.heap_list).free(self.is_kernel);}
     }

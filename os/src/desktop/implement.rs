@@ -234,8 +234,6 @@ impl TextContent {
 
 impl Transform for TextContent {
     fn set_position(&mut self, x : u32, y : u32) {
-        self.x = x;
-        self.y = y;
         self.content.set_position(x, y);
     }
 
@@ -250,16 +248,14 @@ impl Transform for TextContent {
     }
 
     fn translate(&mut self, x : i32, y : i32) {
-        let mut x = self.x as i32 + x;
-        let mut y = self.y as i32 + y;
-        if x < 0{
-            x = 0;
-        }
-        if y < 0{
-            y = 0;
-        }
-        self.x = x as u32;
-        self.y = y as u32;
+        // let mut x = self.x as i32 + x;
+        // let mut y = self.y as i32 + y;
+        // if x < 0{
+        //     x = 0;
+        // }
+        // if y < 0{
+        //     y = 0;
+        // }
         self.content.translate(x, y);
     }
 }

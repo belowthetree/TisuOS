@@ -4,6 +4,8 @@
 
 gitee 地址：https://gitee.com/belowthetree/tisu-os
 
+github 地址：https://github.com/belowthetree/TisuOS
+
 ## 编译
 
 环境：
