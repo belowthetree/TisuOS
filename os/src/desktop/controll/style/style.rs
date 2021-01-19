@@ -38,16 +38,6 @@ impl Style {
             element : elem,
         }
     }
-    fn get_color(&self,x : u32, y : u32, width : u32, height : u32)->Element{
-        match self.color_style {
-            ColorStyle::SolidColor => {
-                Element::new(x, y, width, height)
-            }
-            ColorStyle::Texture => {
-                Element::new(x, y, width, height)
-            }
-        }
-    }
     pub fn resize(&mut self, width : u32, height : u32){
         self.element.resize(width, height);
         match self.color_style {
@@ -98,8 +88,10 @@ impl Transform for Style{
     fn minimum(&mut self) {
     }
 
-    fn detect(&self, point : Point)->bool {
-        false
+    fn detect(&mut self, point : Position)->bool {
+        let x = point.x;
+        let y = point.y;
+        self.element.x <= x && self.element.y <= y && self.element.x + self.element.width >= x && self.element.y + self.element.height >= y
     }
 
     fn translate(&mut self, x : i32, y : i32) {
@@ -116,9 +108,6 @@ impl Transform for Style{
     }
 }
 
-use core::mem::size_of;
-
-use crate::{desktop::desktop_trait::Transform, filesystem::image::image::Image, memory::block::Block, uart, virtio::input::input_buffer::Point};
-use alloc::{prelude::v1::*};
+use crate::{desktop::{desktop::Position, desktop_trait::Transform}, filesystem::image::image::Image};
 use crate::{graphic::element::{Element, Draw}, virtio::gpu_device::Pixel};
 

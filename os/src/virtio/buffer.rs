@@ -10,7 +10,7 @@ const BUFFER_SIZE : usize = 1024 * 4096; // 4 MB
 const CACHE_SIZE : usize = 2;
 static mut COUNTER : usize = 1;
 static mut CACHE : Option<Vec<Buffer>> = None;
-
+pub static mut DEBUG : bool = false;
 pub struct Buffer{
     mutex : ReadWriteMutex,
     cnt : usize,
@@ -43,7 +43,13 @@ impl Buffer {
         let st = idx - self.idx;
         self.mutex.read();
         unsafe {
+            // if DEBUG {
+            //     println!("start copy addr {:x} size {}", target as usize, size);
+            // }
             target.copy_from(self.addr.add(st), size);
+            // if DEBUG {
+            //     println!("end copy");
+            // }
         }
         self.mutex.unlock();
     }

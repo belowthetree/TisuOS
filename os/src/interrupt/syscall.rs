@@ -25,14 +25,8 @@ pub fn handler(env : &Environment) -> usize {
             thread::print();
         }
         57 => {
-            let func = env.regs[Register::A1.val()];
-            let pid = get_current_thread().unwrap().pid;
-            if fork(func, pid).is_ok(){
-                rt = 1;
-            }
-            else{
-                rt = 0;
-            }
+            let t = get_current_thread().unwrap();
+            fork(env, t);
         }
         60 => {
             process::delete_current_process();
@@ -47,7 +41,11 @@ pub fn handler(env : &Environment) -> usize {
     rt
 }
 
-fn fork(func : usize, pid : usize)->Result<(), ()>{
+fn fork(env : &Environment, thread : &Thread){
+    thread::fork(env, thread);
+}
+#[allow(dead_code)]
+fn branch(func : usize, pid : usize)->Result<(), ()>{
     let p = get_process_by_pid(pid).unwrap();
     p.fork(func)
 }
@@ -59,6 +57,7 @@ fn exec(func : usize, satp : usize, is_kernel : bool){
 }
 
 use process::{add_process_machine, get_process_by_pid};
+use thread::{Thread};
 
 use crate::{cpu, task::{process::{Process, self}, thread::{self, get_current_thread}}};
 use crate::uart;

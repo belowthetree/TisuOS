@@ -36,6 +36,14 @@ pub fn to_u64(s : String)->u64{
     rt
 }
 
+pub fn convert_to_usize(s : &String)->usize{
+    let mut rt : usize = 0;
+    for c in s.bytes(){
+        rt = rt * 10 + c as usize - '0' as usize;
+    }
+    rt
+}
+
 pub fn check_sum(s : &String)->u8{
     let mut rt : u8 = 0;
     for (i, c) in s.bytes().enumerate(){

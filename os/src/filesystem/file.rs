@@ -221,6 +221,7 @@ impl File {
             None
         }
         else {
+            println!("file read cluster {}, idx {:x}, len {}", self.start_cluster, idx, len);
             read_content(self.block_idx, self.start_cluster, idx, len)
         }
     }
@@ -251,7 +252,7 @@ impl OpenFlag{
 }
 
 
-use crate::{memory::block::{Block}, sync::Mutex};
+use crate::{memory::block::{Block}, sync::Mutex, uart};
 use super::{operation::read_content, file_tree::TreeItem};
 use alloc::{prelude::v1::*};
 

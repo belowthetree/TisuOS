@@ -5,7 +5,6 @@
 
 use alloc::{prelude::v1::*};
 
-const BUFFER_SIZE : usize = 4096;
 pub const FLAG_END : u32 = 0x0fffffff;
 
 //
@@ -70,11 +69,10 @@ pub struct FATManger{
     root_dir_cluster_addr : usize,
     /// 第一个簇开始的地址
     pub cluster_start_addr : usize,
-    buffer : Box<memory::block::Block>,
-    read_addr : usize,
     pub block_idx : usize,
     pub bpb : BPB,
 }
+static mut DEBUG : bool = false;
 impl FATManger {
     pub fn new(info : &FATInfo, block_idx : usize) -> Self{
         let byte_per_sector = info.bpb.bytes_per_sector as usize;
@@ -91,8 +89,6 @@ impl FATManger {
             root_dir_cluster_addr : info.get_directory_addr(),
             cluster_start_addr : info.get_directory_addr() - cluster_size * 2,
             cluster_size : cluster_size,
-            buffer : new_block(BUFFER_SIZE),
-            read_addr : 0,
             block_idx : block_idx,
             bpb : info.bpb.clone()
         }
@@ -100,16 +96,18 @@ impl FATManger {
     // 获取 fat 表项
     pub fn get_fat_item(&mut self, cluster : usize) ->Option<FATItem> {
         let addr = self.fat_addr as usize + cluster * size_of::<FATItem>();
-        let tadr = addr / BUFFER_SIZE * BUFFER_SIZE;
-        if tadr != self.read_addr{
-            self.read_addr = tadr;
-            sync_read_buffer(self.block_idx, 
-                self.buffer.addr, BUFFER_SIZE as u32, self.read_addr);
-        }
-        let idx = addr % BUFFER_SIZE;
+        let b = new_block(size_of::<FATItem>());
+        // if unsafe {DEBUG} {
+        //     println!("before read fat");
+        // }
+        sync_read_buffer(self.block_idx, 
+            b.addr, size_of::<FATItem>() as u32, addr);
+        // if unsafe {DEBUG} {
+        //     println!("after read fat");
+        // }
         unsafe{
             Some(
-                (*(self.buffer.addr.add(idx) as *mut FATItem)).clone()
+                (*(b.addr as *mut FATItem)).clone()
             )
         }
     }
@@ -180,19 +178,6 @@ impl FATManger {
         let offset = cluster * size_of::<FATItem>() + self.fat_addr;
         println!("write offset {:x}", offset);
         sync_write_buffer(self.block_idx, b.addr, 4, offset);
-        let tadr = offset / BUFFER_SIZE * BUFFER_SIZE;
-        if tadr != self.read_addr{
-            self.read_addr = tadr;
-            println!("reread {:x}", self.read_addr);
-            sync_read_buffer(self.block_idx, self.buffer.addr, 
-                BUFFER_SIZE as u32, self.read_addr);
-        }
-        else{
-            unsafe {
-                let idx = (offset - self.read_addr) / 4;
-                (self.buffer.addr as *mut u32).add(idx).write_volatile(val);
-            }
-        }
     }
     pub fn find_free_fat_item(&mut self, num : usize)->Option<usize>{
         let mut cluster : usize = 2;
@@ -354,8 +339,13 @@ impl FATManger {
     fn get_all_cluster(&mut self, start_cluster : usize) ->Option<Vec::<usize>> {
         let mut rt = Vec::<usize>::new();
         let mut num = start_cluster;
+        unsafe {
+            DEBUG = true;
+        }
+        // println!("start {} {:x}", num, self.fat_addr);
         loop {
             if let Some(item) = self.get_fat_item(num){
+                // println!("next {:x}", item.item);
                 if !item.is_end(){
                     if item.is_bad(){
                         return None;

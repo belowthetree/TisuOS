@@ -33,11 +33,6 @@ impl Environment {
             epc:   0,
         }
     }
-    pub fn init(&mut self, epc : usize, stack : usize, satp : usize){
-        self.epc = epc;
-        self.satp = satp;
-        self.regs[2] = stack;
-    }
     pub fn copy(&mut self, env : &Environment){
         for i in 0..32{
             self.regs[i] = env.regs[i];
@@ -111,7 +106,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                 delete_current_thread();
             }
             15 => {
-                println!("Store page fault {}", 0);
+                println!("Store page fault epc {:x}", env.epc);
                 delete_current_thread();
             }
             _ => {

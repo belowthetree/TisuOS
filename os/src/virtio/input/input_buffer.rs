@@ -9,7 +9,7 @@ use core::ops::Sub;
 
 const QUEUE_SIZE : usize = 128;
 static mut MOUSE_CUR_IDX : usize = 0;
-static mut MOUSE_GET_IDX : usize = 0;
+// static mut MOUSE_GET_IDX : usize = 0;
 static mut KEY_PRESS_CUR_IDX : usize = 0;
 static mut KEY_PRESS_GET_IDX : usize = 0;
 pub static mut KEY_RELEASE_CUR_IDX : usize = 0;
@@ -107,4 +107,4 @@ impl Sub for Point{
     }
 }
 
-use crate::uart;
+// use crate::uart;

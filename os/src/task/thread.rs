@@ -77,7 +77,62 @@ impl Thread {
             is_kernel : p.is_kernel,
         })
     }
+    pub fn copy(src_env : &Environment, thread : &Thread)->Option<Self>{
+        let mut env = src_env.clone();
+        let stack_bottom;
+        let tid = unsafe{ THREAD_CNT };
+        let stack_top;
+        if thread.is_kernel{
+            stack_bottom = page::alloc_kernel_page(STACK_PAGE_NUM);
+        }
+        else{
+            stack_bottom = page::alloc_user_page(STACK_PAGE_NUM);
+        }
+        if stack_bottom.is_null(){
+            return None;
+        }
+        let satp = SATP::from(thread.env.satp);
+        let pt = satp.get_page_table();
+        unsafe {
+            if thread.is_kernel{
+                for i in 0..STACK_PAGE_NUM{
+                    let addr = stack_bottom as usize + i * PAGE_SIZE;
+                    (*pt).map_kernel_data(addr, addr);
+                }
+            }
+            else {
+                for i in 0..STACK_PAGE_NUM{
+                    let addr = stack_bottom as usize + i * PAGE_SIZE;
+                    (*pt).map_user_data(addr, addr);
+                }
+            }
+            let stack_size = STACK_PAGE_NUM * PAGE_SIZE;
+            let src = (thread.stack_top as usize - stack_size) as *mut u8;
+            stack_bottom.copy_from(src, stack_size);
+        }
 
+        stack_top = stack_bottom as usize + PAGE_SIZE * STACK_PAGE_NUM;
+        env.epc = src_env.epc + 4;
+        env.regs[Register::SP.val()] = stack_top - (thread.stack_top as usize - src_env.regs[Register::SP.val()]);
+        println!("thread copy src stack {:x} sp {:x}, new stack {:x} sp {:x}", thread.stack_top as usize,
+            src_env.regs[Register::SP.val()], stack_top, env.regs[Register::SP.val()]);
+        env.regs[Register::A0.val()] = tid;
+        unsafe {
+            THREAD_CNT = THREAD_CNT + 1;
+            if THREAD_CNT == 0{
+                THREAD_CNT += 1;
+            }
+        }
+        Some(Self{
+            env : env,
+            state : ThreadState::Waiting,
+            stack_top : stack_top as *mut u8,
+            pid : thread.pid,
+            tid : tid,
+            hartid : 0,
+            is_kernel : thread.is_kernel,
+        })
+    }
 }
 
 impl Drop for Thread{
@@ -119,6 +174,18 @@ pub fn create_thread<'a>(func : usize, p : &Process)->Option<&'a mut Thread>{
         }
         THREAD_LOCK.unlock();
         None
+    }
+}
+
+pub fn fork(env : &Environment, thread : &Thread){
+    unsafe {
+        THREAD_LOCK.lock();
+        if let Some(list) = &mut THREAD_LIST{
+            if let Some(t) = Thread::copy(env, thread){
+                list.push(t);
+            }
+        }
+        THREAD_LOCK.unlock();
     }
 }
 

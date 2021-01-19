@@ -37,6 +37,9 @@ pub fn init(){
 /// 封装了底层文件系统的操作
 pub fn read_content(block_idx : usize, cluster : usize, offset : usize, len : usize)->Option<Box<Block>>{
     if let Some(mgr) = get_mgr(block_idx){
+        unsafe {
+            buffer::DEBUG = true;
+        }
         mgr.read(block_idx, cluster, offset, len)
     }
     else{
@@ -135,7 +138,7 @@ pub trait BlockInfo {
     fn get_used_size(&mut self)->usize;
 }
 
-use crate::{uart, virtio::buffer::sync_read_buffer};
+use crate::{uart, virtio::buffer::{self, sync_read_buffer}};
 use super::{fat32, file::{File, OPENED_FILES}, file_tree::{FileTree}};
 use crate::virtio::block_device::{BLOCKS};
 use crate::memory::block::{Block, new_block};

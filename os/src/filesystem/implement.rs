@@ -23,18 +23,23 @@ impl IO for FATManger {
         let mut ptr = rt.addr;
         let mut offset = self.cluster_start_addr + cluster * self.cluster_size + offset;
         while item.has_next(){
-            sync_read_buffer(block_idx, ptr, 
+            // println!("fat read cluster {} addr {:x} size {}", cluster, offset, min(size, self.cluster_size));
+            sync_read_buffer(block_idx, ptr,
                 min(size, self.cluster_size) as u32, offset);
             unsafe {
-                ptr = ptr.add(size);
+                ptr = ptr.add(min(size, self.cluster_size));
             }
             cluster = item.get_next_item_num() as usize;
+            // println!("cluster size {} size {}", self.cluster_size, size);
             size -= min(self.cluster_size, size);
+            // println!("size {}", size);
             item = self.get_fat_item(cluster).unwrap();
             offset = self.cluster_start_addr + cluster * self.cluster_size;
         }
+        // println!("fat read cluster {} addr {:x} size {}", cluster, offset, min(size, self.cluster_size));
         sync_read_buffer(block_idx, ptr, 
             min(size, self.cluster_size) as u32, offset);
+        // println!("end");
         Some(rt)
     }
 
@@ -63,6 +68,7 @@ impl IO for FATManger {
 impl Directory for FATManger{
     fn get_file_tree(&mut self, cluster : usize)->Option<super::file_tree::FileTree> {
         if let Some(items) = self.get_dir_items(cluster){
+            println!("after get item");
             let mut files = Vec::<TreeItem>::new();
             let mut filename = String::new();
             let mut len = 0;

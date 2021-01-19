@@ -11,6 +11,7 @@ pub struct Button{
     pub y : u32,
     pub width : u32,
     pub height : u32,
+    pub click : bool,
 }
 
 pub const BUTTON_WIDTH : u32 = 30;
@@ -25,6 +26,7 @@ impl Button{
             y : y,
             width : width,
             height : height,
+            click : false,
         }
     }
     pub fn new_default()->Self{
@@ -36,6 +38,7 @@ impl Button{
             y : 0,
             width : BUTTON_WIDTH,
             height : 20,
+            click : false,
         }
     }
     pub fn resize(&mut self, width : u32, height : u32) {
@@ -62,11 +65,27 @@ impl Transform for Button{
     fn minimum(&mut self) {
     }
 
-    fn detect(&self, point : Point)->bool {
-        false
+    fn detect(&mut self, point : Position)->bool {
+        let x = point.x;
+        let y = point.y;
+        let rt = self.x <= x && self.y <= y && self.x + self.width >= x && self.y + self.height >= y;
+        if rt {
+            self.click = true;
+        }
+        rt
     }
 
     fn translate(&mut self, x : i32, y : i32) {
+        let mut xx = self.x as i32 + x;
+        let mut yy = self.y as i32 + y;
+        if xx < 0{
+            xx = 0;
+        }
+        if yy < 0{
+            yy = 0;
+        }
+        self.x = xx as u32;
+        self.y = yy as u32;
         self.background.translate(x, y);
     }
 }
@@ -74,11 +93,10 @@ impl Transform for Button{
 
 
 
-use core::cmp::{max, min};
 use desktop_trait::Transform;
 
-use crate::{uart, virtio::input::input_buffer::Point};
-use crate::{desktop::desktop_trait, virtio::gpu_device::{HEIGHT, Pixel, WIDTH}};
+use crate::{desktop::desktop::Position};
+use crate::{desktop::desktop_trait, virtio::gpu_device::{Pixel}};
 use crate::graphic::transform::ElemTranform;
 use super::style::style::{ColorStyle, Style};
 

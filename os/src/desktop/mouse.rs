@@ -2,11 +2,10 @@
 //! 
 //! 2021年1月11日 zg
 
-use crate::{interrupt::timer::get_million_time, task::process::print, virtio::{gpu_device::{HEIGHT, WIDTH}, input::{input_buffer::{Point, get_mouse_position}, keyboard::{Key}}}};
+use crate::{interrupt::timer::get_million_time, virtio::{gpu_device::{HEIGHT, WIDTH}, input::{input_buffer::{Point, get_mouse_position}, keyboard::{Key}}}};
 
 const BUFFER_SIZE : usize = 128;
 const DOUBLE_INTERVAL : usize = 400; // 双击判定间隔，单位毫秒
-static mut MOUSE_EVENT : [MouseEvent;BUFFER_SIZE] = [MouseEvent::None;BUFFER_SIZE];
 
 pub struct Mouse{
     pub pre_pos : Point,
@@ -27,8 +26,8 @@ pub enum MouseEvent{
     LeftClick,
     LeftDoubleClick,
     RightClick,
-    ScrollDown,
-    ScrollUp,
+    // ScrollDown,
+    // ScrollUp,
     Drag,
 }
 
@@ -120,4 +119,4 @@ impl Mouse {
 }
 
 
-use crate::uart;
+// use crate::uart;

@@ -58,13 +58,20 @@ impl Shell {
                 "readimg" => {
                     if let Some(tree) = &mut self.file_tree{
                         if let Some(item) = tree.get_item(&s[1].to_string()){
-                            if let Some(file) = item.get_file(){
+                            if let Some(mut file) = item.get_file(){
+                                file.open(OpenFlag::Read.val()).ok();
+                                println!("before generate");
                                 let img = generate_image(file);
                                 if let Some(img) = img{
                                     let mut style = Style::new_default();
+                                    println!("before set texture");
                                     style.set_texture(img);
+                                    println!("before resize");
                                     style.resize(WIDTH as u32, HEIGHT as u32);
                                     style.draw_area();
+                                }
+                                else {
+                                    println!("no img");
                                 }
                             }
                         }

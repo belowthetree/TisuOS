@@ -389,10 +389,19 @@ pub fn create_process(func : usize, is_kernel : bool)->Option<Process>{
 
 /// 初始化进程
 pub fn init_process(){
-    fork(shell::update as usize);
-    fork(buffer::write_down_handler as usize);
+    if fork() != 0 {
+        shell::update();
+    }
+    if fork() != 0{
+        buffer::write_down_handler();
+    }
     Desktop::new();
-    fork(desktop::handler as usize);
+    if fork() != 0 {
+        desktop::handler();
+    }
+    // if fork() != 0 {
+    //     gpu_device::refresh();
+    // }
     unsafe {
         loop {
             asm!("wfi"::::"volatile");
@@ -401,12 +410,13 @@ pub fn init_process(){
 }
 
 extern crate alloc;
+use crate::{libs::syscall};
+use syscall::fork;
 use core::{mem::size_of, ptr::null_mut};
-
 use alloc::{collections::VecDeque};
 use page::{PAGE_SIZE};
 use page_table::{SATP, PageBit};
-use crate::{cpu, desktop::desktop::{self, Desktop}, interact::shell, interrupt::trap::{Environment, Register}, libs::syscall::fork, memory::global_allocator, memory::page_table, memory::user_allocator::MemoryList, page, sync::
+use crate::{cpu, desktop::desktop::{self, Desktop}, interact::shell, interrupt::trap::{Environment, Register}, memory::global_allocator, memory::page_table, memory::user_allocator::MemoryList, page, sync::
 MultiMutex, uart, virtio::buffer};
 
 use super::thread::{self, Thread};

@@ -49,7 +49,6 @@ impl Draw for Element {
         };
         
         draw_rect_override(DEVICE_ID, rect, &self.content);
-        flush_gpu();
     }
 }
 
@@ -133,10 +132,10 @@ impl ElemTranform for Element{
 
 
 
-/// 调用 GPU 刷新显示
-fn flush_gpu(){
-    gpu_device::flush(DEVICE_ID);
-}
+// /// 调用 GPU 刷新显示
+// fn flush_gpu(){
+//     gpu_device::flush(DEVICE_ID);
+// }
 
 
 use core::{intrinsics::sqrtf64, mem::size_of};

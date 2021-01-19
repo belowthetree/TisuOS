@@ -36,6 +36,7 @@ pub struct Terminal{
     pub depth : u32,
     pub head_bar : HeadBar,
     pub text : TextContent,
+    pub id : usize,
 }
 
 pub struct TextContent{
@@ -57,6 +58,22 @@ pub struct HeadBar{
 
 pub struct Dock{
     
+}
+#[derive(Clone, Copy)]
+pub struct Position {
+    pub x : u32,
+    pub y : u32,
+}
+
+impl Position {
+    pub fn from_point(point : Point)->Self{
+        let x = (point.x * WIDTH as f32) as u32;
+        let y = (point.y * HEIGHT as f32) as u32;
+        Self{
+            x : x,
+            y : y,
+        }
+    }
 }
 
 pub fn init(){
@@ -92,7 +109,7 @@ pub fn register_desktop(desktop : Desktop){
 
 use alloc::{prelude::v1::*};
 
-use crate::{sync::Mutex, virtio::input::input_buffer::Point};
+use crate::{sync::Mutex, virtio::{gpu_device::{HEIGHT, WIDTH}, input::input_buffer::Point}};
 
-use super::{controll::{button::Button, style::style::{self, Style}}, mouse::Mouse};
+use super::{controll::{button::Button, style::style::{Style}}, mouse::Mouse};
 

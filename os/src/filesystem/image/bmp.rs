@@ -31,7 +31,9 @@ impl BMP {
 
 pub fn generate_image(file : File)->Option<Image>{
     let content;
+    println!("before read bmp");
     if let Some(ctx) = file.read(0, file.size){
+        println!("after read bmp");
         content = ctx;
     }
     else{

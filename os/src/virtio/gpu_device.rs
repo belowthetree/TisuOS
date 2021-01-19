@@ -62,14 +62,19 @@ pub struct GPU{
     queue_idx : usize,
     used_idx : usize,
     frame_buffer : *mut Pixel,
+    buffer2 : *mut Pixel,
     width : usize,
     height : usize,
+    display_idx : usize,
+    write_idx : usize,
+    mutex : Mutex,
 }
 
 impl GPU {
     pub fn new(queue : *mut Queue, ptr : *mut u32, idx : usize)->Self{
-        let n = (WIDTH * HEIGHT * size_of::<Pixel>() + PAGE_SIZE - 1) / PAGE_SIZE;
+        let n = (WIDTH * HEIGHT * size_of::<Pixel>() + PAGE_SIZE - 1) / PAGE_SIZE + 2;
         let addr = alloc_kernel_page(n);
+        let addr2 = alloc_kernel_page(n);
         Self{
             queue : queue,
             device_idx : idx,
@@ -77,8 +82,12 @@ impl GPU {
             queue_idx : 0,
             used_idx : 0,
             frame_buffer : addr as *mut Pixel,
+            buffer2 : addr2 as *mut Pixel,
             width : WIDTH,
             height : HEIGHT,
+            display_idx : 1,
+            write_idx : 2,
+            mutex : Mutex::new(),
         }
     }
     /// 清空屏幕 rgba（10，10，10，255）
@@ -88,6 +97,13 @@ impl GPU {
         self.create_resouce_id(self.width, self.height, 1);
         self.attach(1);
         self.set_scanout(rect.clone(), 1, 0);
+        // self.run();
+        //
+        // self.create_resouce_id(self.width, self.height, 2);
+        // self.attach(2);
+        // self.set_scanout(rect.clone(), 2, 10);
+        // self.run();
+        //
         self.transfer(rect.clone(), 1);
         self.flush(rect.clone(), 1);
         self.run();
@@ -96,6 +112,9 @@ impl GPU {
     pub fn flush(&mut self, rect : Rect, resource_idx : usize){
         let flush = ResourceFlush::new(rect, resource_idx);
         let header = ControllHeader::new();
+        unsafe {
+            (*header).ctype = ControllType::ResourceFlush;
+        }
         let head_idx = self.queue_idx;
         self.add_desc(flush as u64, size_of::<ResourceFlush>() as u32, VIRTIO_DESC_F_NEXT);
         self.add_desc(header as u64, size_of::<ControllHeader>() as u32, VIRTIO_DESC_F_WRITE);
@@ -105,6 +124,9 @@ impl GPU {
     pub fn transfer(&mut self, rect : Rect, resource_idx : usize){
         let trans = TransferToHost2d::new(rect, resource_idx);
         let header = ControllHeader::new();
+        unsafe {
+            (*header).ctype = ControllType::TransferToHost2d;
+        }
         let head_idx = self.queue_idx;
         self.add_desc(trans as u64, size_of::<TransferToHost2d>() as u32, VIRTIO_DESC_F_NEXT);
         self.add_desc(header as u64, size_of::<ControllHeader>() as u32, VIRTIO_DESC_F_WRITE);
@@ -113,16 +135,22 @@ impl GPU {
     /// 将 source 和 scanout 中的某个区域绑定
     pub fn set_scanout(&mut self, rect : Rect, resource_idx : usize, scanout_idx : usize){
         let scan = Scanout::new(rect, resource_idx, scanout_idx);
-        let res = ControllHeader::new();
+        let header = ControllHeader::new();
+        unsafe {
+            (*header).ctype = ControllType::SetScanout;
+        }
         let head_idx = self.queue_idx;
         self.add_desc(scan as u64, size_of::<Scanout>() as u32, VIRTIO_DESC_F_NEXT);
-        self.add_desc(res as u64, size_of::<ControllHeader>() as u32, VIRTIO_DESC_F_WRITE);
+        self.add_desc(header as u64, size_of::<ControllHeader>() as u32, VIRTIO_DESC_F_WRITE);
         self.add_ring(head_idx);
     }
     /// 创建一个 source，设定好宽、高
     pub fn create_resouce_id(&mut self, width : usize, height : usize, resource_idx : usize){
         let rect = Create2D::new(width, height, resource_idx);
         let header = ControllHeader::new();
+        unsafe {
+            (*header).ctype = ControllType::ResourceCreate2d;
+        }
         let head_idx = self.queue_idx;
         self.add_desc(rect as u64, size_of::<Create2D>() as u32, VIRTIO_DESC_F_NEXT);
         self.add_desc(header as u64, size_of::<ControllHeader>() as u32, VIRTIO_DESC_F_WRITE);
@@ -130,9 +158,12 @@ impl GPU {
     }
     /// 将 source 与某块内存绑定
     pub fn attach(&mut self, resource_idx : u32){
-        let at = AttachBacking::new(resource_idx, 1);
+        let at = AttachBacking::new(resource_idx, resource_idx);
         let entry = self.entry();
         let header = ControllHeader::new();
+        unsafe {
+            (*header).ctype = ControllType::ResourceAttachBacking;
+        }
         let head_idx = self.queue_idx;
         self.add_desc(at as u64, size_of::<AttachBacking>() as u32, VIRTIO_DESC_F_NEXT);
         self.add_desc(entry as u64, size_of::<MemEntry>() as u32, VIRTIO_DESC_F_NEXT);
@@ -140,9 +171,6 @@ impl GPU {
         self.add_ring(head_idx);
     }
     pub fn draw_rect_override(&mut self, rect : Rect, color_buffer : &Box<Block>){
-        if rect.x1 as usize >= self.width || rect.y1 as usize > self.height{
-            return;
-        }
         let st = rect.y1 as usize * self.width;
         let ed = min(rect.y2 as usize, self.height) * self.width;
         let ptr = color_buffer.addr as *const Pixel;
@@ -150,6 +178,7 @@ impl GPU {
         let mut row = 0;
         let width = (rect.x2 - rect.x1) as usize;
         let line = (min(rect.x2, self.width as u32) - rect.x1) as usize;
+        self.mutex.lock();
         for y in (st..ed).step_by(self.width){
             idx = row * width;
             unsafe {
@@ -157,8 +186,15 @@ impl GPU {
             }
             row += 1;
         }
-        self.transfer(rect, 1);
-        self.run();
+        // let rect = Rect {
+        //     x1 : rect.x1,
+        //     y1 : rect.y1,
+        //     x2 : min(rect.x2, self.width as u32),
+        //     y2 : min(rect.y2, self.height as u32),
+        // };
+        // self.transfer(rect, self.display_idx);
+        // self.run();
+        self.mutex.unlock();
     }
     pub fn draw_rect_blend(&mut self, rect : Rect, color_buffer : &Box<Block>){
         if rect.x1 as usize >= self.width || rect.y1 as usize > self.height{
@@ -189,6 +225,19 @@ impl GPU {
         }
         assert!(idx * size_of::<Pixel>() <= color_buffer.size);
         self.transfer(rect, 1);
+        self.run();
+    }
+    pub fn switch_buffer(&mut self){
+        // println!("switch buffer");
+        let rect = Rect {
+            x1 : 0,
+            y1 : 0,
+            x2 : self.width as u32,
+            y2 : self.height as u32,
+        };
+        self.mutex.lock();
+        self.transfer(rect, self.display_idx);
+        self.flush(rect, self.display_idx);
         self.run();
     }
     /// 发送 QueueNotify
@@ -232,6 +281,7 @@ impl GPU {
                 unsafe {
                     let idx = j * self.width + i;
                     self.frame_buffer.add(idx).write_volatile(color);
+                    self.buffer2.add(idx).write_volatile(color);
                 }
             }
         }
@@ -306,10 +356,13 @@ pub fn pending(pin : usize) {
                             free_kernel(queue.desc[idx].addr as *mut u8);
                             idx = queue.desc[idx].next as usize;
                         }
+                        if (*(queue.desc[idx].addr as *const ControllHeader)).ctype != ControllType::RespOkNoData{
+                            println!("GPU Err {:?}", (*(queue.desc[idx].addr as *const ControllHeader)).ctype);
+                        }
                         free_kernel(queue.desc[idx].addr as *mut u8);
                         dev.used_idx = dev.used_idx.wrapping_add(1);
                     }
-                    break;
+                    dev.mutex.unlock();
                 }
             }
         }
@@ -330,6 +383,19 @@ pub fn draw_rect_override(device_idx : usize, rect : Rect, color_buffer : &Box<B
     }
 }
 
+// pub fn refresh(){
+//     loop {
+//         unsafe {
+//             asm!("wfi"::::"volatile");
+//             if let Some(gpus) = &mut DEVICE{
+//                 for gpu in gpus.iter_mut(){
+//                     gpu.switch_buffer();
+//                 }
+//             }
+//         }
+//     }
+// }
+
 pub fn draw_rect_blend(device_idx : usize, rect : Rect, color_buffer : &Box<Block>){
     unsafe {
         if let Some(gpus) = &mut DEVICE{
@@ -339,14 +405,16 @@ pub fn draw_rect_blend(device_idx : usize, rect : Rect, color_buffer : &Box<Bloc
     }
 }
 
-pub fn flush(device_idx : usize){
+pub fn refresh(){
     unsafe {
         if let Some(gpus) = &mut DEVICE{
-            let gpu = &mut gpus[device_idx];
-            let rect = Rect{x1:0, y1:0, x2:gpu.width as u32, y2:gpu.height as u32};
-            gpu.transfer(rect, 1);
-            gpu.flush(rect, 1);
-            gpu.run();
+            for gpu in gpus {
+                let rect = Rect{x1:0, y1:0, x2:gpu.width as u32, y2:gpu.height as u32};
+                gpu.mutex.lock();
+                gpu.transfer(rect, gpu.display_idx);
+                gpu.flush(rect, gpu.display_idx);
+                gpu.run();
+            }
         }
     }
 }
@@ -385,8 +453,8 @@ impl Create2D {
 }
 
 impl ControllHeader {
-    pub fn new()->*const ControllHeader{
-        alloc_kernel(size_of::<ControllHeader>()) as *const ControllHeader
+    pub fn new()->*mut ControllHeader{
+        alloc_kernel(size_of::<ControllHeader>()) as *mut ControllHeader
     }
 }
 
@@ -549,7 +617,7 @@ enum PixelFormat {
     R8G8B8X8 = 134,
 }
 #[repr(u32)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ControllType {
     GetDisplayInfo = 0x0100,
 	ResourceCreate2d,
@@ -580,7 +648,7 @@ pub enum ControllType {
 	RespErrInvalidParameter,
 }
 
-use crate::{memory::{block::Block, global_allocator::{alloc_kernel, free_kernel}, page::{PAGE_SIZE, alloc_kernel_page}}, uart};
+use crate::{memory::{block::Block, global_allocator::{alloc_kernel, free_kernel}, page::{PAGE_SIZE, alloc_kernel_page}}, sync::Mutex, uart};
 use core::{cmp::min, mem::size_of};
 use alloc::{prelude::v1::*};
 use device::{Descriptor, VIRTIO_DESC_F_NEXT, VIRTIO_DESC_F_WRITE};

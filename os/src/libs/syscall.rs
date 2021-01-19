@@ -5,10 +5,18 @@ extern "C" {
     pub fn make_syscall(num : usize, arg1 : usize, arg2 : usize, arg3 : usize, arg4 : usize) -> usize;
 }
 
+// #[macro_export]
+// macro_rules! fork {
+//     () => {
+//         unsafe {
+//             asm!("ecall"::"a0"(57)::"volatile");
+//         }
+//     };
+// }
 
-pub fn fork(func : usize)->usize{
+pub fn fork()->usize{
     unsafe {
-        make_syscall(57, func, 0, 0, 0)
+        make_syscall(57, 0, 0, 0, 0)
     }
 }
 

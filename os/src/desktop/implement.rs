@@ -11,6 +11,11 @@ const TERMINAL_HEIGHT : u32 = 300;
 impl Desktop {
     pub fn new(){
         let mut back = Style::new_default();
+        let mut file = open(&"0/mac.bmp".to_string()).unwrap();
+        if file.open(OpenFlag::Read.val()).is_ok(){
+            let image = generate_image(file).unwrap();
+            back.set_texture(image);
+        }
         back.resize(WIDTH as u32, HEIGHT as u32);
         let rt = Self{
             valid : false,
@@ -29,6 +34,7 @@ impl Desktop {
             self.draw();
             self.valid = true;
         }
+        self.remove_window();
     }
     pub fn draw(&self){
         self.background.draw_area();
@@ -38,6 +44,12 @@ impl Desktop {
         for window in self.window.iter(){
             window.draw();
         }
+        refresh();
+    }
+    pub fn setup_background(&mut self, path : &String){
+        let file = open(path).unwrap();
+        let image = generate_image(file).unwrap();
+        self.background.set_texture(image);
     }
     pub fn create_terminal(&mut self, x : u32, y : u32){
         self.valid = false;
@@ -87,7 +99,7 @@ impl Desktop {
                 break;
             }
             self.cmd(e);
-            println!("{:?}", e);
+            // println!("{:?}", e);
         }
     }
     pub fn cmd(&mut self, event : MouseEvent){
@@ -97,17 +109,12 @@ impl Desktop {
                 self.create_terminal((p.x * WIDTH as f32) as u32, (p.y * HEIGHT as f32) as u32);
             }
             MouseEvent::LeftClick => {
-                if let Some(term) = self.select_window(self.mouse.pre_pos){
-                    println!("get term");
+                if let Some(_) = self.select_window(self.mouse.pre_pos){
                 }
             }
             MouseEvent::Drag => {
                 let dir = self.mouse.get_move_dir();
                 if let Some(term) = self.select_window(self.mouse.pre_pos){
-                    println!("get term");
-                    let x = (term.x as i32 + dir.0) as u32;
-                    let y = (term.y as i32 + dir.1) as u32;
-                    println!("{} {} {} {}", term.x, term.y, x, y);
                     term.translate(dir.0, dir.1);
                     self.valid = false;
                 }
@@ -116,6 +123,7 @@ impl Desktop {
         }
     }
     pub fn select_window<'a>(&'a mut self, point : Point)->Option<&'a mut Terminal>{
+        let point = Position::from_point(point);
         if self.terminal.len() > 0 {
             for term in self.terminal.iter_mut(){
                 if term.detect(point) {
@@ -130,6 +138,16 @@ impl Desktop {
     }
     pub fn get_mouse_point(&self)->Point{
         self.mouse.cur_pos
+    }
+    pub fn remove_window(&mut self){
+        for (idx, t) in self.terminal.iter().enumerate() {
+            if t.is_close() {
+                println!("get close");
+                self.terminal.remove(idx);
+                self.valid = false;
+                break;
+            }
+        }
     }
 }
 
@@ -161,8 +179,15 @@ impl Window {
 /// Terminal
 ///
 
+static mut TERMINAL_ID : usize = 0;
+
 impl Terminal {
     pub fn new(x : u32, y : u32, width : u32, height : u32)->Self{
+        let id;
+        unsafe {
+            id = TERMINAL_ID;
+            TERMINAL_ID += 1;
+        }
         let rt = Self{
             x : x,
             y : y,
@@ -170,13 +195,17 @@ impl Terminal {
             height : height,
             depth : 0,
             head_bar : HeadBar::new(x, y, width, HEADBAR_HEIGHT),
-            text : TextContent::new(x, y, width, height)
+            text : TextContent::new(x, y, width, height),
+            id : id,
         };
         rt
     }
     pub fn draw(&self){
         self.head_bar.draw();
         self.text.draw();
+    }
+    pub fn is_close(&self)->bool{
+        self.head_bar.close_button.click
     }
 }
 
@@ -192,23 +221,31 @@ impl Transform for Terminal {
     fn minimum(&mut self) {
     }
 
-    fn detect(&self, point : Point)->bool {
-        let x = (point.x * WIDTH as f32) as u32;
-        let y = (point.y * HEIGHT as f32) as u32;
-        self.x <= x && self.y <= y && self.x + self.width >= x && self.y + self.height >= y
+    fn detect(&mut self, point : Position)->bool {
+        let x = point.x;
+        let y = point.y;
+        let rt = self.x <= x && self.y <= y && self.x + self.width >= x && self.y + self.height >= y;
+        if rt {
+            self.head_bar.detect(point);
+        }
+        rt
     }
 
     fn translate(&mut self, x : i32, y : i32) {
-        let mut x = self.x as i32 + x;
-        let mut y = self.y as i32 + y;
-        if x < 0{
-            x = 0;
+        let mut x = x;
+        let mut y = y;
+        let mut xx = self.x as i32 + x;
+        let mut yy = self.y as i32 + y;
+        if xx < 0{
+            xx = 0;
+            x = - (self.x as i32);
         }
-        if y < 0{
-            y = 0;
+        if yy < 0{
+            yy = 0;
+            y = - (self.y as i32);
         }
-        self.x = x as u32;
-        self.y = y as u32;
+        self.x = xx as u32;
+        self.y = yy as u32;
         self.head_bar.translate(x, y);
         self.text.translate(x, y);
     }
@@ -243,19 +280,11 @@ impl Transform for TextContent {
     fn minimum(&mut self) {
     }
 
-    fn detect(&self, point : Point)->bool {
-        false
+    fn detect(&mut self, point : Position)->bool {
+        self.content.detect(point)
     }
 
     fn translate(&mut self, x : i32, y : i32) {
-        // let mut x = self.x as i32 + x;
-        // let mut y = self.y as i32 + y;
-        // if x < 0{
-        //     x = 0;
-        // }
-        // if y < 0{
-        //     y = 0;
-        // }
         self.content.translate(x, y);
     }
 }
@@ -318,27 +347,34 @@ impl Transform for HeadBar {
     fn minimum(&mut self) {
     }
 
-    fn detect(&self, point : Point)->bool {
-        false
+    fn detect(&mut self, point : Position)->bool {
+        let x = point.x;
+        let y = point.y;
+        let rt = self.x <= x && self.y <= y && self.x + self.width >= x && self.y + self.height >= y;
+        if rt {
+            self.close_button.detect(point);
+        }
+        rt
     }
 
     fn translate(&mut self, x : i32, y : i32) {
-        let mut x = self.x as i32 + x;
-        let mut y = self.y as i32 + y;
-        if x < 0{
-            x = 0;
+        let mut xx = self.x as i32 + x;
+        let mut yy = self.y as i32 + y;
+        if xx < 0{
+            xx = 0;
         }
-        if y < 0{
-            y = 0;
+        if yy < 0{
+            yy = 0;
         }
-        self.x = x as u32;
-        self.y = y as u32;
+        self.x = xx as u32;
+        self.y = yy as u32;
         self.background.translate(x, y);
         self.close_button.translate(x, y);
     }
 }
 
-use crate::{virtio::{gpu_device::{HEIGHT, Pixel, WIDTH}, input::{input_buffer::{KEY_RELEASE_CUR_IDX, KEY_RELEASE_GET_IDX, Point, get_key_press, get_key_release}, keyboard::Key}}};
+use crate::{filesystem::{file::OpenFlag, image::bmp::generate_image, interface::open}, virtio::{gpu_device::{HEIGHT, Pixel, WIDTH, refresh}, input::{input_buffer::{Point, get_key_press, get_key_release}, keyboard::Key}}};
 use crate::uart;
-use super::{controll::{button::{BUTTON_WIDTH, Button}, style::style::{ColorStyle, Style}}, desktop::{Desktop, Dock, HeadBar, Terminal, TextContent, Window, register_desktop}, desktop_trait::Transform, mouse::{Mouse, MouseEvent}};
+use super::{controll::{button::{BUTTON_WIDTH, Button}, style::style::{ColorStyle, Style}},
+    desktop::{Desktop, Dock, HeadBar, Position, Terminal, TextContent, Window, register_desktop}, desktop_trait::{Transform}, mouse::{Mouse, MouseEvent}};
 use alloc::{prelude::v1::*};
