@@ -24,6 +24,25 @@ github 地址：https://github.com/belowthetree/TisuOS
 
 `qemu-system-riscv64 -machine virt -cpu rv64 -smp 4 -m 128M -drive if=none,format=raw,file=hdd.dsk,id=foo -device virtio-blk-device,scsi=off,drive=foo -nographic -serial mon:stdio -bios none -device virtio-rng-device -device virtio-gpu-device -device virtio-net-device -device virtio-tablet-device -device virtio-keyboard-device -kernel `
 
+## 教程部分
+
+本项目提供教程，默认学习者具备基本的计算机知识，包括但不限于：
+
+* 编译、链接
+* 进程、线程的基本概念
+* 内存的基本概念
+* 一定的算法知识
+
+其中涉及到的
+
+* `Rust` 语言部分需要学习者自学（不难）
+* 链接文件不需要掌握，看得懂会改就行
+* `Makefile` 会查资料修改就行
+
+每一部分的章节都有对应的源码（除了部分内容较少的章节，一般在下一章节可以找到对应的源码），为了减小体积，会删除 `target`、硬盘镜像，需要自己新建。
+
+完整的内核最新版在 `gitee` 保持更新，会同步纯源码版（网速原因）到 `github` （当我想起来的时候）。
+
 ## 内核功能
 
 ### Uart
