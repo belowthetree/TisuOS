@@ -12,7 +12,7 @@
   * 块设备
   * GPU
 * 中断管理
-* 内存管理，以一种类似 Slab 的方式基于页表进行管理
+* 内存管理，以一种类似 Slab 的方式基于内存页进行管理
 * 任务系统，包括：
   * 进程，作为程序存在的唯一标志
   * 线程，程序执行的具体单位
@@ -317,7 +317,7 @@ use core::panic::PanicInfo;
   * 页表错误，处理器访问了没有映射的地址
   * 除零错误
 
-2. 中断号保存在 `mcause` 寄存器中，最高位是 1 说明是同步异常，否则是中断
+2. 中断号保存在 `mcause` 寄存器中，记录了中断类型。最高位是 1 说明是同步异常，否则是中断
 3. `mepc` 储存中断前执行指令的地址，调用 `mret` 返回后会执行其中的地址
 4. 对于 `RISCV` 而言，当前运行的状态保存在`mstatus` 寄存器中
 
@@ -497,6 +497,8 @@ uart 输入输出作为主要的调试手段非常重要。开发内核调试手
 
 你可能会遇到非常多的错误，根据经验，如果你遇到的错误是调用了某些函数出现的，或者说这个错误很奇怪，莫名其妙，那么通常是栈的问题，某些函数栈指针越界修改了内存中的某些变量（通常这也是攻击手段）。要避免这种情况，首先确保你分配了足够大的栈给函数，本项目代码分配了很大的栈，理论上不会出问题，除非函数调用实在太深。
 
+事实上，操作系统的绝大部分错误都是内存相关的
+
 ## 第四章-中断控制
 
 > 参考：
@@ -505,7 +507,7 @@ uart 输入输出作为主要的调试手段非常重要。开发内核调试手
 
 ### 知识预备
 
-前文已经提到中断触发之后处理器会停下手里的活，去执行别的地方的指令来处理中断，处理完中断后再返回。这个过程会破坏原有的寄存器环境，所以在我们跳转到 `m_trap_vector` 函数之后我们不能立刻进行处理，我们需要先进行环境的保存，在返回原来的指令前还要恢复环境。
+前文已经提到中断触发之后处理器会停下手里的活，去执行别的地方的指令来处理中断，处理完中断后再返回。这个过程会破坏原有的寄存器环境，所以在我们跳转到 `m_trap_vector` 函数之后我们不能立刻进行处理，我们需要先进行环境的保存，在处理完中断后还要恢复环境，然后才能继续执行触发中断前的指令。
 
 ### 保存环境
 
@@ -527,10 +529,12 @@ pub fn init(){
 }
 ```
 
-这里定义一个结构体用来代表处理器环境。同时定义 4 个静态变量用来作为临时储存的地方。具体的储存操作在汇编代码部分进行，保存完环境之后跳转到 Rust 部分，Rust 部分结束后回到汇编部分恢复环境，然后离开中断处理。可以看到我们根据当前的核心号修改了 `mscratch` 的值，`mscratch` 保存了其中一个环境变量的地址，在进入中断后我们会将环境临时保存在那。
+这里定义一个结构体 `Environment` 用来代表处理器环境。同时定义一个静态变量数组 `ENVS` 用来作为临时储存的地方。具体的储存操作在汇编代码部分进行，保存完环境之后跳转到 Rust 部分，Rust 部分结束后回到汇编部分恢复环境，然后离开中断处理。可以看到我们根据当前的核心号修改了 `mscratch` 的值，这个寄存器一般是空闲的，我们可以用来存放数组其中一个元素的地址，这样在保存环境的时候直接把环境存入其中就可以了。
 
 ```assembly
+# 读取 mscratch 的值放入 t6 中
 csrrw	t6, mscratch, t6
+# 利用宏进行批量操作，将所有寄存器的值保存
 .set 	i, 1
 .rept	30
 save_gp	%i
@@ -566,6 +570,7 @@ la		t0, _trap_stack_end
 li		t1, 0x10000
 mul		t1, t1, a2
 sub		sp, t0, t1
+# m_trap 是 Rust 中断处理函数
 call	m_trap
 
 csrw	mepc, a0
@@ -590,20 +595,31 @@ mret
 
 这里使用了汇编的一些宏（不然就要几十行重复的代码）。
 
+为了测试中断功能，你可以故意在代码中触发一些错误，比如：
+
+```rust
+unsafe {
+    let ptr = 0 as *mut u8;
+    ptr.write_volatile(0);
+}
+```
+
+不过要确保你在 `mie` 寄存器中开启了对应的中断
+
 ## 第五章-内存管理
 
 > 接下来是本教程的重中之重，做不好接下来所有工作都无法正常进行
 
 内存管理主要是做两个活：
 
-* 记录使用情况
-* 根据需求进行分配、释放
+* 记录内存使用情况
+* 根据需求进行内存分配、释放
 
-因为现代处理器基本都用页表进行内存管理，所以一般的做法是将内存划分成很多个页表并记录他们的使用情况。分配和释放的话也是基于页表的管理，主要是根据申请的大小进行。
+因为现代处理器基本都用页表进行内存管理，所以一般的做法是将内存划分成很多个页并记录他们的使用情况，这在后续的页表映射中会很方便。分配和释放的话也是基于分页，主要是根据申请的大小进行。
 
-所以第一步是将内存按页表进行划分，这在后续的页表映射中会方便很多。页表分成两个部分，内核和用户
+所以第一步是将内存按页进行划分。内存页分成两个部分，内核和用户，本项目大概给内核 八十多MB 的内存
 
-### 将内存以页表进行划分
+### 将内存以页进行划分
 
 我们在链接文件中定义好了一个 `_heap_start`，它在我们的中断用的栈后面。为了获取这个值，我们在 `src/asm/mem.S` 中获取了它
 
@@ -627,9 +643,9 @@ extern "C" {
 }
 ```
 
-这里使用一个八位的页表结构 `Page` 来代表一个页表的使用情况。
+这里使用一个八位的页结构 `Page` 来代表一个内存页的使用情况。
 
-`Page` 的工作逻辑是，申请页表之后在 `Page` 数组里查找足够数量的页表，然后将它们标记为已用，最后一个页表标记为 `End`。释放的时候根据地址，看看属于哪个页表，然后逐个清空，直到遇到最后一个页表 `End`。
+`Page` 的工作逻辑是，申请内存页之后在 `Page` 数组里查找足够数量的内存页，然后将它们标记为已用，最后一个分页标记为 `End`。释放的时候根据地址，看看属于哪个内存页，然后逐个清空，直到遇到最后一个属性为 `End` 的 `Page`。
 
 ```rust
 pub enum PageBit{
@@ -648,14 +664,14 @@ pub struct Page{
 }
 ```
 
-我们直接在 `HEAP_START` 处开始，每一个字节代表一个 `Page`。一个 `Page` 代表一个 4KB 大小的页表，这也是许多教程会采用的方式，直接在内核后面放置页表的记录结构。
+我们直接在 `HEAP_START` 处开始，每一个字节存放一个 `Page`。一个 `Page` 代表一个 4KB 大小的内存页，这也是许多教程会采用的方式，直接在内核后面放置内存页的记录结构。
 
 ```rust
 pub fn init(){
 	unsafe {
         // HEAP_START 是内核结束的地址，我们把
 		PAGES = HEAP_START as *mut Page;
-        // 内存（包括 MMIO 区域）可以划分成多少个页表
+        // 内存（包括 MMIO 区域）可以划分成多少个内存页
 		TOTAL_PAGE = MEMORY_END / PAGE_SIZE;
 		let ptr = PAGES;
 		for i in 0..TOTAL_PAGE {
@@ -671,7 +687,7 @@ pub fn init(){
 }
 ```
 
-页表的申请和释放非常简单，不过在返回申请结果前我们通常需要清零
+内存页的申请和释放非常简单，不过在返回申请结果前我们通常需要清零
 
 ```rust
 pub fn alloc_kernel_page(num : usize) -> *mut u8{
@@ -701,7 +717,7 @@ pub fn alloc_kernel_page(num : usize) -> *mut u8{
 		null_mut()
 	}
 }
-/// 释放给定地址对应的页表
+/// 释放给定地址对应的内存页
 pub fn free_page(addr : *mut u8) {
 	assert!(!addr.is_null());
 	unsafe {
@@ -726,7 +742,7 @@ pub fn free_page(addr : *mut u8) {
 
 #### 基本结构功能
 
-内存分配器的主要作用是管理指定大小的内存，这里我参考了一些已有的例子（应该是 Slab 算法）。
+内存分配器的主要作用是管理指定大小的内存，这里我参考了一些已有的例子（应该是 Slab 算法）。这种算法的思路是将申请的大小按照 2 的幂次向上对齐，然后一次申请一片内存，将内存按照对齐后的大小分块，每次申请同样的大小时就直接划出一块。为了加速计算且节约内存，用 `bitmap` 记录分块的使用情况，即用一位代表一个块。
 
 ```rust
 pub struct Memory{
@@ -750,13 +766,13 @@ pub struct Memory{
 * `page` 代表管理的内存的属性
 * `search_idx` 是用来加速搜索空块的
 
-内核与用户内存分别用两个 `Memory` 作为首元素
+内核与用户内存分别用两个空的 `Memory` 作为首元素
 
 创建新的元素时按照如下逻辑：
 
 1. 将大小按照 2 的幂次对齐
 
-2. 如果比较小，申请四倍以上的空间，将 `Memory` 结构放在页表的开头部分。
+2. 如果比较小，申请四倍以上的空间，将 `Memory` 结构放在内存页的开头部分。
 
    1. ```rust
       // 确定对齐大小
@@ -783,7 +799,7 @@ pub struct Memory{
           }
           free_cnt = total_size / sz;
       }
-      // 如果较小，则直接放置在申请的页表内
+      // 如果较小，则直接放置在申请的分页内
       else {
           struct_addr = phy_addr;
           free_cnt = (total_size - struct_size) / sz;
@@ -796,7 +812,7 @@ pub struct Memory{
 
 1. 将大小按照 2 的幂次对齐
 2. 查找符合大小且还有空余块的链表元素
-3. 没有符合条件的进行创建，有则直接下一步
+3. 没有符合条件的就创建新的 `Memory`，有则直接下一步
 4. 利用 `bitmap` 查找空闲的内存块
 
 当内存释放时，并非直接释放：
@@ -816,7 +832,7 @@ pub struct Memory{
                   (*head).free_bitmap(addr);
       ```
 
-3. 如果此大小的内存块全部都是空闲状态，就要考虑是否把这个大小的元素删除。这里的策略是如果相同大小的链表元素很多并且空闲的数量大于三分之一，那么就释放这个元素
+3. 如果此 `Memory` 内存块全部都是空闲状态，就要考虑是否把这个的 `Memory` 删除。这里的策略是如果相同大小的 `Memory` 中空闲的 `Memory` 数量大于三分之一，那么就释放这个 `Memory`
 
    1. ```rust
       let node = &*head;
@@ -825,7 +841,7 @@ pub struct Memory{
           let size = node.size;
           let free_cnt = Memory::get_free_block_num(size, h);
           if free_cnt > 1 && free_cnt * 2 > Memory::get_used_block_num(size, h) {
-              // 如果块结构体在自己管理的页表内
+              // 如果块结构体在自己管理的分页内
               if node.free_cnt < node.total_cnt {
                   page::free_page(head as *mut u8);
               }
@@ -857,7 +873,7 @@ unsafe impl GlobalAlloc for OSGlobalAlloc {
 
 #### 总结
 
-虽然此部分代码量很大，但是其实并不复杂。但是为了不出错，需要进行很多测试，我写了一个测试用的函数在 `src/lib.rs` 中，如果你自己实现了自己的内存分配方法，一定要进行大量测试，合理使用 `assert!`，保证每个地方都按照预想输出。
+虽然此部分代码量很大，但是其实并不复杂。但是为了不出错，需要进行很多测试，因为后续的大量工作都依赖于内存管理。我写了一个测试用的函数在 `src/lib.rs` 中，如果你自己实现了自己的内存分配方法，一定要进行大量测试，合理使用 `assert!`，保证每个地方都按照预想输出。
 
 当然，内存分配的方法并非唯一，可以参考我给出的那个史蒂芬教授的做法，直接一个链表把所有内存接起来也可以
 
@@ -867,20 +883,29 @@ unsafe impl GlobalAlloc for OSGlobalAlloc {
 
 #### 知识预备
 
-现代处理器有分页功能，当我们访问某个地址的时候，处理器会将这个地址（成为逻辑地址）拆分成多段，比如三级页表，分成四段。第一段在一级页表里面作为偏移读取对应的地址，这个地址指向二级页表；第二段在二级页表里面作为偏移读取对应的地址，这个地址指向三级页表；第三段类似，不过得到的是地址的一部分，然后逻辑地址的第四段加上这部分组成最终的地址指向物理内存。
+物理地址指的是内存的实际地址；逻辑地址/虚拟地址指的是代码中的地址。如果没有开启分页，那么这两者一般等价。
+
+然后是两个概念：
+
+* 页表项，如下图。其中 `PPN` 储存物理页号，如果最后一级页表的页表项，则指向最终地址的页号，否则指向下一个页表的页号
+* 页表，一个页表项数组，一般占据一个内存页的大小
+
+分页功能开启后，当我们访问一个地址，处理器会首先找到根页表的位置，然后根据地址得到一个页表项。根据页表项中的地址访问物理内存或者找到下一个页表：
+
+当我们访问某个地址的时候，处理器会将这个地址（称为逻辑地址）拆分成多段，比如三级页表，会分成四段。第一段在一级页表里面作为偏移读取对应的地址，读取的这个地址指向二级页表；第二段在二级页表里面作为偏移读取对应的地址，读取的这个地址指向三级页表；第三段类似，不过读取得到的地址是物理地址的一部分，然后逻辑地址的第四段加上这部分组成最终的地址指向物理内存。
 
 ![](../图/satp1.png)
 
-对于 RISCV 而言，第一级页表的地址放在 `satp` 寄存器中，当然这个地址被截断了，因为页表项总是占一个页表，所以它是以页表为单位，如果你的根页表放在 0x1000，那么它的 `PPN` 就是 1. 具体的映射可以看看下图，VPN 就是逻辑地址（虚拟地址），这个是 32 位下的两级页表
+对于 RISCV 而言，第一级页表的地址放在 `satp` 寄存器的 `PPN` 域中，当然这个地址被截断了，因为页表项总是占一个页表，所以它是以页表为单位，如果你的根页表放在 0x1000，那么它的 `PPN` 就是 1. 具体的映射可以看下图，VPN 就是逻辑地址（虚拟地址），这个是 32 位下的两级页表映射过程。
 
-通常 64 位使用 Rv39，逻辑地址中
+![](../图/PTE.bmp)
+
+通常 64 位使用 Rv39，在逻辑地址中
 
 * 39~30 位是第一级页表的偏移
 * 21~29 位是第二级页表偏移
 * 12~20 位是第三级页表偏移
 * 0~11 位是地址页内偏移，需要和第三级的 `PPN` 拼起来组成物理地址
-
-![](../图/PTE.bmp)
 
 #### 实现
 
@@ -1045,6 +1070,8 @@ pub fn set_next_interrupt(seconds : usize){
 
 进程作为一个程序的存在标志，保存程序的页表、堆、状态等关键信息；`pid` 是进程号，`tid` 是进程下的线程号的集合。进程本身不参与调度。进程创建之后会初始化一个主线程，主线程代表进程的执行周期，主线程执行完毕进程就结束。
 
+一个进程维护一个页表映射
+
 这里多了一个堆链，考虑到之后有 `malloc` 调用的需求，所以增加了一个用户堆结构。用链表将所有用户申请的内存链接起来
 
 ```rust
@@ -1059,7 +1086,7 @@ pub struct Process{
 }
 ```
 
-进程可以不断产生新的线程，新的线程根据进程的信息进程构造，避免重复进行页表映射
+进程可以不断产生新的线程，新的线程根据进程的信息进程构造
 
 ```rust
 pub fn fork(&mut self, func : usize)->Result<(), ()>{
@@ -1089,7 +1116,7 @@ impl Drop for Thread{
 }
 ```
 
-而调度方法也很简单，我们从中断那边过来，可以获取到环境信息，先将得到的环境放入线程的环境中，然后切换到下一个等待的线程。
+而调度方法也很简单，我们在中断处理函数中可以获取到环境信息，先将得到的环境放入线程的环境中，然后切换到下一个等待的线程。
 
 线程分为三种状态：
 
@@ -1169,6 +1196,8 @@ fn switch_next(){
 > https://chromitem-soc.readthedocs.io/en/latest/clint.html
 >
 > https://docs.oasis-open.org/virtio/virtio/v1.1/cs01/virtio-v1.1-cs01.pdf
+
+一般磁盘会被划分成很多个扇区，正常情况下一个扇区 512 字节。每次读写以扇区为基本单位，称为块设备。
 
 #### 映射
 
@@ -1377,3 +1406,197 @@ pub struct Buffer{
 * `size` 缓冲区大小
 * `addr` 缓冲区所在的内存
 * `is_write` 是否发生了写入，有的话会在监控进程中将缓冲内容写入磁盘
+
+## 第九章-文件系统
+
+> https://blog.csdn.net/yangsongqbs/article/details/7796921 
+>
+> https://www.cnblogs.com/Chary/p/12981056.html
+
+### 知识预备
+
+为了方便，采用 FAT32 文件系统。头部结构如下（Extend 没用上就没列出），在你格式化了某个磁盘后，这一部分信息可以在第一个扇区获取到。在块设备的基础上，FAT32 文件系统多了一个单位簇，由一定数量的扇区组成。
+
+```rust
+pub struct FATInfo{
+    jump1   : u8,
+    j2      : u8,
+    j3      : u8,
+    oem     : [u8;8],
+    bpb     : BPB,
+    ext     : Extend,
+}
+pub struct BPB {
+    pub bytes_per_sector    : u16,
+    pub sector_per_cluster  : u8,
+    pub reserved_sector     : u16, // 第一个簇之前的所有扇区都是保留扇区
+    pub fat_num             : u8,
+    pub root_entry          : u16, // fat32 不使用
+    pub total_sector1       : u16, // 如果为 0，使用 total_sector2中的值
+    pub desc                : u8, // 提供有关媒体被使用的信息。值0xF8表示硬盘，0xF0表示高密度的3.5寸软盘
+    pub sector_per_fat_16   : u16, // 16 位下
+    pub sector_per_track    : u16, // 每磁道扇区
+    pub track_num           : u16,  // 磁头数
+    pub hidden_sector       : u32, // 引导扇区之前的扇区数，无分区为 0
+    pub total_sector2       : u32,
+    pub fat_sector_num      : u32,
+}
+```
+
+FAT32 是 32 位的文件系统，只能记录不大于 4G 的文件。 但对本项目而言够用。
+
+#### FAT32 表
+
+FAT32 文件系统需要维护两个称为 FAT 表的东西（实际上只有一个有用，另一个作为备份）。
+
+FAT表包含许多 32 位的 FAT 表项，第 i 个表项代表第 i 个簇的使用情况。其中，前两个表项保留。
+
+| 表项值                | 意义                 |
+| --------------------- | -------------------- |
+| 0x2~0x0ffffff6        | 指向文件的下一个簇号 |
+| 0x0ffffff7            | 坏簇                 |
+| 0x0ffffff8~0x0fffffff | 文件最后一个簇       |
+
+#### 目录
+
+格式化后第一个簇通常作为根目录。文件和子目录用目录项描述，分为长文件名目录项、短文件名目录项。长文件名的编码为 `utf-16`
+
+```rust
+pub struct FATShortDirItem{
+    pub filename : u64,
+    ext_name : [u8;3],
+    pub attr : u8,
+    reserved : u8,
+    create_time_ext : u8, // 10 毫秒位
+    create_time : u16,
+    create_date : u16, // 16
+    last_access_date : u16,
+    start_cluster_high : u16,
+    last_change_time : u16,
+    last_change_date : u16,
+    start_cluster_low : u16,
+    pub file_length : u32,
+}
+pub struct FATLongDirItem{
+    pub flag : u8,
+    pub name1 : [u16;5],
+    pub attr : u8,
+    reserved : u8,
+    pub check : u8,
+    pub name2 : [u16;6],
+    pub start_cluster : u16, // 常置 0
+    pub name3 : [u16;2]
+}
+```
+
+区分两者的重要标志是 `attr`。
+
+```rust
+pub enum Attribute{
+    Empty = 0,
+    ReadOnly = 1,
+    Hidden = 2,
+    System = 4,
+    VolumeLabel = 8,
+    SubDir = 16,
+    Archive = 32,
+    LongName = 1 | 2 | 4 | 8,
+}
+```
+
+长文件如果过长，会分成多个项，然后倒序放置。顺序号从 1 开始。通常长文件名后面跟一个短文件名，截取长文件名的前六位 + "~1"，如果已有此短文件名，数字加一，直到等于 5，文件类型不变。
+
+![](../图/长文件名目录项.jpg)
+
+### 文件系统抽象
+
+考虑到以后或者读者有扩展的想法，在实现文件的操作前需要做一个抽象。
+
+#### 文件树
+
+文件树将目录作为节点，每个节点保存有文件作为叶子。不过由于目录与文件的目录项结构一致，所以用一个树项统一存放。从结构来看，文件树就是一个目录的切面。
+
+```rust
+pub struct FileTree{
+    pub name : String,
+    pub items : Vec::<TreeItem>,
+    pub start_cluster : usize,
+    pub parent_cluster : Vec<usize>,
+    pub block_idx : usize,
+}
+pub struct TreeItem{
+    pub filename : String,
+    pub name : String,
+    pub start_cluster : usize,
+    pub block_idx : usize,
+    pub size : usize,
+    pub idx : usize,
+    pub len : usize,
+    attr : u8,
+}
+```
+
+此处记录了父目录，一般来说目录中会记录父目录的地址，所以有点多余，不过不影响。`block_idx` 指出从属于哪块设备。
+
+#### 接口规范
+
+```rust
+pub trait IO {
+    fn read(&mut self, block_idx : usize, cluster : usize, offset : usize, len : usize)->Option<Block>;
+    fn write(&mut self, block_idx : usize, cluster : usize, offset : usize, len : usize, content : &Box<Block>);
+}
+
+pub trait Directory {
+    fn get_file_tree(&mut self, cluster : usize)->Option<FileTree>;
+    fn get_root_file_tree(&mut self)->Option<FileTree>;
+    fn create_directory(&mut self, tree : &FileTree, name : &String)->bool;
+    fn clear_directory(&mut self, cluster : usize);
+    fn delete_file(&mut self, tree : &FileTree, name : &String)->bool;
+}
+
+pub trait BlockInfo {
+    fn get_total_size(&self)->usize;
+    fn get_used_size(&mut self)->usize;
+}
+```
+
+所有类型的文件系统都必须实现这几个规范。在这基础上提供一系列功能。下方的函数在上方的接口基础上实现
+
+```rust
+/// ## 读取磁盘内容
+/// 封装了底层文件系统的操作
+pub fn read_content(block_idx : usize, cluster : usize, offset : usize, len : usize)->Option<Block>
+/// ## 写入磁盘内容
+pub fn write_content(block_idx : usize, cluster : usize, offset : usize, len : usize, content : &Box<Block>)
+/// ## 获取目录的文件树
+/// @ block_idx : 磁盘号
+/// @ cluster : 传入目录的簇号
+pub fn get_directory(block_idx : usize, cluster : usize) ->Option<FileTree>
+```
+
+大部分操作都可以满足。
+
+#### 文件
+
+一开始其实没有实现文件概念，不过为了方便后续的功能，有必要实现文件的抽象。
+
+```rust
+pub struct File{
+    pub filename : String,
+    pub start_cluster : usize,
+    pub block_idx : usize,
+    pub open_cnt : usize,
+    pub size : usize,
+    pub flag : u8,
+}
+```
+
+`File` 作为磁盘文件的唯一标识符，为了防止读写的冲突，文件允许多重只读打开，一个写打开。提供：
+
+* 打开
+* 关闭
+* 读取
+* 写入
+
+自此，所有磁盘操作被抽象成了文件操作
+
