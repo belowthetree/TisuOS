@@ -2,6 +2,8 @@
 
 # 太素 TisuOS
 
+![](图/系统截图.jpg)
+
 gitee 地址：https://gitee.com/belowthetree/tisu-os
 
 github 地址：https://github.com/belowthetree/TisuOS

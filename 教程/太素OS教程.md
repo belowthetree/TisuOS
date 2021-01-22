@@ -970,6 +970,35 @@ pub fn map(&mut self, virtual_addr : usize, physic_addr : usize, flag : u64){
 
 上述代码就是重复三次映射的过程，向内存管理器申请内存放置页表项
 
+### 免费垃圾回收机制
+
+垃圾回收是高级语言的特性，你在申请内存后不需要手动释放。Rust 利用编译器隐式添加构造、析构函数帮助我们实现了类似的功能。在实现了内存管理后，我们就可以利用 Rust 的这个特性了。
+
+```rust
+pub struct Block{
+    pub addr : *mut u8,
+    pub size : usize,
+}
+impl Block {
+    pub fn new(size : usize)->Block{
+        let addr = alloc(size, true);
+        assert!(!addr.is_null());
+        Block {
+            addr : addr,
+            size : size,
+        }
+    }
+    //....
+}
+impl Drop for Block{
+    fn drop(&mut self) {
+        free(self.addr);
+    }
+}
+```
+
+后续的高级功能，如文件系统就可以大量使用 `Block`。
+
 ## 第六章-同步
 
 同步其实是针对进程的。解决这样的一个情况：当进程一对一个全局变量进行修改的时候刚切换到了下一个进程，下一个进程又对这个全局变量进行了修改。假如这个变量是个指针，原本进程一想用它修改地址 0x100，结果进程二把它改成了 0x200，那么最终进程一就会修改 0x200 处的内容。
@@ -1372,6 +1401,8 @@ pub struct Used {
 
   * `ring` 记录读取了哪些 `desc`
 
+在设置好 `Queue` 之后，写入 `QueueNotify` 位就可以让设备读取 `Queue`。
+
 当磁盘完成读写后会触发一个 `PLIC` 中断
 
 #### PLIC
@@ -1716,3 +1747,272 @@ pub fn update(){
 
 `Update` 函数会挂载在新的线程中，不断判断输入是否构成一个命令
 
+## 第十一章-图形显示
+
+GPU 的初始化和块设备差不多。不过在使用之前需要先用命令去绑定缓冲区和扫描器。
+
+### 控制
+
+```rust
+pub enum ControllType {
+    GetDisplayInfo = 0x0100,
+	ResourceCreate2d,
+	ResourceUref,
+	SetScanout,
+	ResourceFlush,
+	TransferToHost2d,
+	ResourceAttachBacking,
+	ResourceDetachBacking,
+	GetCapsetInfo,
+	GetCapset,
+	GetEdid,
+	// cursor commands
+	UpdateCursor = 0x0300,
+	MoveCursor,
+	// success responses
+	RespOkNoData = 0x1100,
+	RespOkDisplayInfo,
+	RespOkCapsetInfo,
+	RespOkCapset,
+	RespOkEdid,
+	// error responses
+	RespErrUnspec = 0x1200,
+	RespErrOutOfMemory,
+	RespErrInvalidScanoutId,
+	RespErrInvalidResourceId,
+	RespErrInvalidContextId,
+	RespErrInvalidParameter,
+}
+pub struct ControllHeader{
+    ctype : ControllType,
+    flag : u32,
+    fence_idx : u64,
+    ctx_id : u32,
+    padding : u32,
+}
+```
+
+GPU 设备的控制类型如上。发送 `desc` 时，第一个 `desc` 必然是 `ControllHeader` 指出哪种命令，然后后续看情况发送 `desc`。例如：
+
+```rust
+pub fn set_scanout(&mut self, rect : Rect, resource_idx : usize, scanout_idx : usize){
+    let scan = Scanout::new(rect, resource_idx, scanout_idx);
+    let header = ControllHeader::new();
+    unsafe {
+        (*header).ctype = ControllType::SetScanout;
+    }
+    let head_idx = self.queue_idx;
+    self.add_desc(scan as u64, size_of::<Scanout>() as u32, VIRTIO_DESC_F_NEXT);
+    self.add_desc(header as u64, size_of::<ControllHeader>() as u32, VIRTIO_DESC_F_WRITE);
+    self.add_ring(head_idx);
+}
+pub fn create_resouce_id(&mut self, width : usize, height : usize, resource_idx : usize){
+    let rect = Create2D::new(width, height, resource_idx);
+    let header = ControllHeader::new();
+    unsafe {
+        (*header).ctype = ControllType::ResourceCreate2d;
+    }
+    let head_idx = self.queue_idx;
+    self.add_desc(rect as u64, size_of::<Create2D>() as u32, VIRTIO_DESC_F_NEXT);
+    self.add_desc(header as u64, size_of::<ControllHeader>() as u32, VIRTIO_DESC_F_WRITE);
+    self.add_ring(head_idx);
+}
+```
+
+根据实际检验，似乎 `ControllHeader` 的 `ctype` 即使不设置也可以产生作用。
+
+在 GPU 读取完毕后会产生中断（和块设备一样），它会改写 `ControllHeader` 的 `ctype` 的值，如果没有问题，就是 `RespOkNoData` 之类的。
+
+简单来说，GPU 会读取内存中的一块区域，显示在屏幕上。以一个像素为单位，一般是 RGBA 的格式，32 位
+
+在具体进行绘图前需要做一些准备工作：
+
+1. 创建资源号
+2. 将资源号和内存绑定，这一块内存称为缓冲区（frame_buffer)
+3. 将资源号和扫描器绑定。扫描器可以有多个，不过我这个似乎只有一个，怎么设置我也不清楚，如果有两个就可以实现双缓冲
+
+准备完成之后主要是绘图操作：
+
+1. 设置缓冲区内的传输区域，由结构体 `Rect` 描述
+2. 设置刷新区域
+3. 写入 `QueueNotify` 域，通知 GPU 读取 `desc`
+
+### 接口
+
+为了契合 GPU 控制，我们的绘图 API 设置成区域绘图的形式，将某块内存直接拷贝过来。
+
+```rust
+pub fn draw_rect_override(&mut self, rect : Rect, color_buffer : *mut Pixel){
+    if rect.x1 as usize >= self.width || rect.y1 as usize > self.height{
+        return;
+    }
+    let st = rect.y1 as usize * self.width;
+    let ed = min(rect.y2 as usize, self.height) * self.width;
+    let ptr = color_buffer;
+    let mut idx;
+    let mut row = 0;
+    let width = (rect.x2 - rect.x1) as usize;
+    let line = (min(rect.x2, self.width as u32) - rect.x1) as usize;
+    self.mutex.lock();
+    for y in (st..ed).step_by(self.width){
+        idx = row * width;
+        unsafe {
+            self.frame_buffer.add(y + rect.x1 as usize).copy_from(ptr.add(idx), line);
+        }
+        row += 1;
+    }
+    self.mutex.unlock();
+}
+```
+
+### 抽象
+
+上面的接口实际上指明了我们抽象的方式。我们应该准备好一块方形区域作为画布，在绘制完成之后传输给 GPU。所以我们的所有绘制操作应该集成在一块区域中，这里我使用一个 `graphic::element` 作为抽象的单位。
+
+```rust
+pub struct Element{
+    pub x : u32,
+    pub y : u32,
+    pub width : u32,
+    pub height : u32,
+    pub content : Block,
+}
+impl Draw for Element {
+    fn draw(&self) {
+        let rect = Rect{
+            x1 : self.x,
+            y1 : self.y,
+            x2 : self.x + self.width,
+            y2 : self.y + self.height,
+        };
+        
+        draw_rect_override(DEVICE_ID, rect, self.content.addr as *mut Pixel);
+    }
+    // ...
+}
+```
+
+## 第十二章-输入
+
+这一章是为了桌面系统准备的。我们需要设置输入设备，并准备好输入缓冲。
+
+### 设备初始化
+
+与前两个提到的设备不同，输入设备在初始化时需要两个队列：事件；状态。前者是设备发送给系统的，后者反之。并且事件队列需要先申请好内存
+
+```rust
+impl InputDevice {
+    pub fn new(pin : usize, ptr : *mut u32) ->Self {
+        let n = (size_of::<Queue>() + PAGE_SIZE - 1) / PAGE_SIZE;
+        let eq = alloc_kernel_page(n) as *mut Queue;
+        let sq = alloc_kernel_page(n) as *mut Queue;
+        unsafe {
+            ptr.add(Offset::GuestPageSize.scale32()).write_volatile(PAGE_SIZE as u32);
+            ptr.add(Offset::QueueSel.scale32()).write_volatile(0);
+            ptr.add(Offset::QueuePfn.scale32()).write_volatile(eq as u32 / PAGE_SIZE as u32);
+            ptr.add(Offset::QueueSel.scale32()).write_volatile(1);
+            ptr.add(Offset::QueuePfn.scale32()).write_volatile(sq as u32 / PAGE_SIZE as u32);
+        }
+        Self{
+            pin_idx : pin,
+            queue_idx : 0,
+            event_used_idx : 0,
+            status_used_idx : 0,
+            event_queue : eq,
+            status_queue : sq,
+            buffer : alloc(EVENT_SIZE * EVENT_BUFFER_ELEMENTS, true) as *mut InputEvent,
+            ptr : ptr,
+        }
+    }
+    pub unsafe fn fill_event(&mut self, buffer_idx : usize) {
+        let desc = Descriptor{
+            addr : self.buffer.add(buffer_idx % EVENT_BUFFER_ELEMENTS) as u64,
+            len : EVENT_SIZE as u32,
+            flags : VIRTIO_DESC_F_WRITE,
+            next : 0,
+        };
+        let head = self.queue_idx as u16;
+        (*self.event_queue).desc[self.queue_idx] = desc;
+        self.queue_idx = (self.queue_idx + 1) % VIRTIO_RING_SIZE;
+        (*self.event_queue).avail.ring[(*self.event_queue).avail.idx as usize % VIRTIO_RING_SIZE] = head;
+        (*self.event_queue).avail.idx = (*self.event_queue).avail.idx.wrapping_add(1);
+    }
+    // ......
+}
+```
+
+### 编码
+
+经过观察，一次输入起码触发两次中断，最后一个中断总是为 `code: 0, value: 0`
+
+对于鼠标：注意！！！双击时鼠标的松开中断会被触发两次
+
+* 鼠标位置（三次中断，以左上角为原点）
+  1. code：0，value 为鼠标在屏幕中的 x 坐标
+  2. code：1，value 为鼠标在屏幕中的 y 坐标
+  3. code：0，value 0
+* 左键（两次中断）
+  1. code：0x110，value：0x1
+* 右键（两次）
+  1. code：0x110，value：0
+* 中键（两次）
+  1. code：0x111，value：0
+* 滚轮（四次）
+  * 上滑
+    * code：8，value：1，event：2
+    * code: 0x0 value: 0x0 event 0
+    * code: 0x151 value: 0x0 event 1
+    * code: 0x0 value: 0x0 event
+  * 下滑
+    * code: 0x8 value: 0xffffffff event 2
+    * code: 0x0 value: 0x0 event 0
+    * code: 0x150 value: 0x0 event 1
+    * code: 0x0 value: 0x0 event 0
+
+对于键盘：
+
+* 从 1 开始，从左往右，从上往下，code 大致从 2 开始
+* 按下时 value 是 1
+* 松开时 value 是 0
+
+### 输入缓冲
+
+```rust
+static mut KEY_PRESSED : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE];
+static mut KEY_RELEASE : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE];
+
+pub fn get_key_press()->u16{
+    unsafe {
+        let idx = KEY_PRESS_GET_IDX;
+        if KEY_PRESS_GET_IDX != KEY_PRESS_CUR_IDX{
+            KEY_PRESS_GET_IDX = (KEY_PRESS_GET_IDX + 1) % QUEUE_SIZE;
+        }
+        else{
+            return 0;
+        }
+        KEY_PRESSED[idx]
+    }
+}
+
+pub fn add_key_press(v : u16){
+    unsafe {
+        KEY_PRESSED[KEY_PRESS_CUR_IDX] = v;
+        KEY_PRESS_CUR_IDX = (KEY_PRESS_CUR_IDX + 1) % QUEUE_SIZE;
+        if let Some(delegate) = &mut DELEGATE {
+            for del in delegate {
+                del();
+            }
+        }
+    }
+}
+```
+
+缓冲的设置非常简单，我们不需要进程同步功能，因为读取和写入的下标是分开的。这是一个循环读写的队列。同时，为了即使响应某些事件，我们会在获取输入时直接调用注册的函数。
+
+## 第十三章-桌面系统
+
+既然有了图形，桌面就近在眼前了（其实还很远）。
+
+## 第十四章-多核心调度
+
+如果你实现
