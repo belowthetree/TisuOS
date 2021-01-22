@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-//! # file manager
+//! # 中继操作
 //! 提供根目录、磁盘信息获取
 //! 是上层文件抽象与底层文件系统的中继
 //! 
@@ -19,9 +19,11 @@ pub fn init(){
         if let Some(blocks) = &mut BLOCKS{
             for idx in 0..blocks.len(){
                 let info = get_fat_info(idx).addr as *const FATInfo;
-                if !(*info).is_fat(){
-                    continue;
-                }
+                // 默认是 fat
+                // if !(*info).is_fat(){
+                //     println!("continue");
+                //     continue;
+                // }
                 let mut mgr = FATManger::new(&*info, idx);
                 print!("disk {} total size {}MB\t\t", idx, mgr.get_total_size() / 1024 / 1024);
                 println!("used size {}MB\t\t", mgr.get_used_size() / 1024 / 1024);
@@ -35,7 +37,7 @@ pub fn init(){
 }
 /// ## 读取磁盘内容
 /// 封装了底层文件系统的操作
-pub fn read_content(block_idx : usize, cluster : usize, offset : usize, len : usize)->Option<Box<Block>>{
+pub fn read_content(block_idx : usize, cluster : usize, offset : usize, len : usize)->Option<Block>{
     if let Some(mgr) = get_mgr(block_idx){
         unsafe {
             buffer::DEBUG = true;
@@ -105,7 +107,7 @@ fn get_mgr<'a>(block_idx : usize) ->Option<&'a mut FATManger>{
 }
 
 /// ## 获取磁盘的 fat32 信息
-fn get_fat_info(block_idx : usize) ->Box<Block>{
+fn get_fat_info(block_idx : usize) ->Block{
     let block = new_block(512);
     sync_read_buffer(block_idx, block.addr, 512, 0);
     block
@@ -121,7 +123,7 @@ pub fn test(){
 /// 
 
 pub trait IO {
-    fn read(&mut self, block_idx : usize, cluster : usize, offset : usize, len : usize)->Option<Box<Block>>;
+    fn read(&mut self, block_idx : usize, cluster : usize, offset : usize, len : usize)->Option<Block>;
     fn write(&mut self, block_idx : usize, cluster : usize, offset : usize, len : usize, content : &Box<Block>);
 }
 

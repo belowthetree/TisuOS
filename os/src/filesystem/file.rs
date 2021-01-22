@@ -216,7 +216,7 @@ impl File {
         close_file(self);
         self.flag = OpenFlag::Close.val();
     }
-    pub fn read(&self, idx : usize, len : usize)->Option<Box<Block>>{
+    pub fn read(&self, idx : usize, len : usize)->Option<Block>{
         if idx >= self.size || self.is_close(){
             None
         }

@@ -101,7 +101,7 @@ impl BlockDevice {
 
 				if pid > 0{
 					wake_up(pid);
-					free_kernel(rq as *mut u8);
+					free(rq as *mut u8);
 				}
 				else {
 					(*rq).lock.unlock();
@@ -174,7 +174,7 @@ pub fn async_write(block_idx : usize, buffer : *mut u8, size : u32, offset : usi
 	unsafe {
 		if let Some(block) = &mut BLOCKS{
 			assert!(block_idx < block.len());
-			let request = alloc_kernel(size_of::<Request>()) as *mut Request;
+			let request = alloc(size_of::<Request>(), true) as *mut Request;
 			if handler == 0{}
 			else if let Some(mut p) = process::create_process(handler as usize, true){
 				p.sleep();
@@ -192,7 +192,7 @@ pub fn async_read(block_idx : usize, buffer : *mut u8, size : u32, offset : usiz
 	unsafe {
 		if let Some(block) = &mut BLOCKS{
 			assert!(block_idx < block.len());
-			let request = alloc_kernel(size_of::<Request>()) as *mut Request;
+			let request = alloc(size_of::<Request>(), true) as *mut Request;
 			
 			if let Some(mut p) = process::create_process(handler as usize, true){
 				p.sleep();
@@ -213,12 +213,12 @@ pub fn sync_write(block_idx : usize, buffer : *mut u8, size : u32, offset : usiz
 	unsafe {
 		if let Some(block) = &mut BLOCKS{
 			assert!(block_idx < block.len());
-			let request = alloc_kernel(size_of::<Request>()) as *mut Request;
+			let request = alloc(size_of::<Request>(), true) as *mut Request;
 			(*request).lock.lock();
 			block[block_idx].operation(buffer, size, offset, true, request);
 			(*request).lock.lock();
 			(*request).lock.unlock();
-			free_kernel(request as *mut u8);
+			free(request as *mut u8);
 		}
 	}
 }
@@ -226,13 +226,13 @@ pub fn sync_read(block_idx : usize, buffer : *mut u8, size : u32, offset : usize
 	unsafe{
 		if let Some(block) = &mut BLOCKS{
 			assert!(block_idx < block.len());
-			let request = alloc_kernel(size_of::<Request>()) as *mut Request;
+			let request = alloc(size_of::<Request>(), true) as *mut Request;
 			assert!(!request.is_null());
 			(*request).lock.lock();
 			block[block_idx].operation(buffer, size, offset, false, request);
 			(*request).lock.lock();
 			(*request).lock.unlock();
-			free_kernel(request as *mut u8);
+			free(request as *mut u8);
 		}
 	}
 }
@@ -253,5 +253,5 @@ pub fn interrupt_handler(pin_num : usize){
 use crate::{task::process::wake_up, uart};
 use crate::page;
 use crate::memory::page::{alloc_kernel_page};
-use crate::memory::global_allocator::{alloc_kernel, free_kernel};
+use crate::memory::global_allocator::{alloc, free};
 use crate::{task::process};

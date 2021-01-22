@@ -106,7 +106,7 @@ impl InputDevice {
             status_used_idx : 0,
             event_queue : eq,
             status_queue : sq,
-            buffer : alloc_kernel(EVENT_SIZE * EVENT_BUFFER_ELEMENTS) as *mut InputEvent,
+            buffer : alloc(EVENT_SIZE * EVENT_BUFFER_ELEMENTS, true) as *mut InputEvent,
             ptr : ptr,
         }
     }
@@ -184,8 +184,9 @@ pub static mut INPUT_DEVICE : Option<Vec<InputDevice>> = None;
 pub fn init(){
     unsafe {
         INPUT_DEVICE = Some(Vec::<InputDevice>::new());
-
+        println!("before 100");
 		ABS_EVENTS = Some(VecDeque::with_capacity(100));
+        println!("before 10");
 		KEY_EVENTS = Some(VecDeque::with_capacity(10));
     }
 }
@@ -247,7 +248,7 @@ pub fn interrupt_handler(pin : usize){
 use core::mem::size_of;
 
 use crate::virtio::{device::{Descriptor, Offset, Queue, StatusField, VIRTIO_DESC_F_WRITE, VIRTIO_F_RING_EVENT_IDX, VIRTIO_RING_SIZE}};
-use crate::{memory::{global_allocator::{alloc_kernel}},
+use crate::{memory::{global_allocator::{alloc}},
     page::{PAGE_SIZE, alloc_kernel_page}, uart};
 
 use super::input_buffer::{Point, add_key_press, add_key_release, add_mouse_position};

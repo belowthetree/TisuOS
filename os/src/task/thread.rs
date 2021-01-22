@@ -152,12 +152,14 @@ extern "C" {
 static mut THREAD_CNT : usize = 1;
 static mut THREAD_LOCK : Mutex = Mutex::new();
 static mut THREAD_LIST : Option<Vec<Thread>> = None;
-static mut ENVIRONMENT : *mut Environment = null_mut();
+static mut ENVIRONMENT : [*mut Environment;4] = [null_mut();4];
 
 pub fn init(){
     unsafe {
         THREAD_LIST = Some(Vec::<Thread>::new());
-        ENVIRONMENT = alloc_kernel(size_of::<Environment>()) as *mut Environment;
+        for i in 0..4{
+            ENVIRONMENT[i] = alloc(size_of::<Environment>(), true) as *mut Environment;
+        }
     }
 }
 
@@ -206,14 +208,13 @@ pub fn wake_up(tid : usize){
 
 pub fn schedule(env : &Environment){
     save_current(env);
-    switch_next();
+    switch_next(env.hartid);
 }
 
-pub fn delete_current_thread(){
+pub fn delete_current_thread(hartid : usize){
     unsafe {
         THREAD_LOCK.lock();
         if let Some(list) = &mut THREAD_LIST{
-            let hartid = cpu::get_hartid();
             for (idx, thread) in list.iter().enumerate() {
                 if thread.state == ThreadState::Running && thread.hartid == hartid{
                     process::drop_thread(thread.pid, thread.tid);
@@ -276,7 +277,7 @@ fn save_current(env : &Environment){
     unsafe {
         THREAD_LOCK.lock();
         if let Some(threads) = &mut THREAD_LIST{
-            let hartid = cpu::get_hartid();
+            let hartid = env.hartid;
             for t in threads{
                 if t.state == ThreadState::Running && t.hartid == hartid {
                     t.env.copy(env);
@@ -288,11 +289,10 @@ fn save_current(env : &Environment){
     }
 }
 
-fn switch_next(){
+fn switch_next(hartid : usize){
     unsafe {
         THREAD_LOCK.lock();
         if let Some(threads) = &mut THREAD_LIST{
-            let hartid = cpu::get_hartid();
             for (idx, t) in threads.iter_mut().enumerate(){
                 if t.state == ThreadState::Running && t.hartid == hartid {
                     t.state = ThreadState::Waiting;
@@ -304,14 +304,15 @@ fn switch_next(){
                 if t.state == ThreadState::Waiting {
                     t.state = ThreadState::Running;
                     t.hartid = hartid;
-                    (*ENVIRONMENT).copy(&t.env);
+                    // println!("run in hartid {}", hartid);
+                    (*ENVIRONMENT[hartid]).copy(&t.env);
                     let is_kernel = t.is_kernel;
                     THREAD_LOCK.unlock();
                     if is_kernel{
-                        switch_kernel_process(ENVIRONMENT as *mut u8);
+                        switch_kernel_process(ENVIRONMENT[hartid] as *mut u8);
                     }
                     else{
-                        switch_user_process(ENVIRONMENT as *mut u8);
+                        switch_user_process(ENVIRONMENT[hartid] as *mut u8);
                     }
                 }
             }
@@ -320,11 +321,10 @@ fn switch_next(){
     }
 }
 
-pub fn get_current_thread<'a>()->Option<&'a Thread>{
+pub fn get_current_thread<'a>(hartid : usize)->Option<&'a Thread>{
     unsafe {
         THREAD_LOCK.lock();
         if let Some(threads) = &mut THREAD_LIST{
-            let hartid = cpu::get_hartid();
             for t in threads{
                 if t.state == ThreadState::Running && t.hartid == hartid{
                     THREAD_LOCK.unlock();
@@ -355,7 +355,7 @@ use core::{mem::size_of, ptr::null_mut};
 use page::{PAGE_SIZE, free_page};
 use alloc::{prelude::v1::*};
 
-use crate::{cpu, uart, interrupt::trap::{Environment, Register}, memory::{global_allocator::alloc_kernel, page, page_table::{SATP}}, sync::Mutex};
+use crate::{uart, interrupt::trap::{Environment, Register}, memory::{global_allocator::alloc, page, page_table::{SATP}}, sync::Mutex};
 
 use super::process::{self, Process, STACK_PAGE_NUM, drop_thread};
 

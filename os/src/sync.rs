@@ -59,8 +59,9 @@ impl MultiMutex {
     }
     fn lock_state(&mut self, hartid : usize) ->bool {
         self.mutex.lock();
-        let rt = self.cnt == 0 || (self.cnt > 0 && hartid == self.hartid);
+        let rt = self.cnt == 0 || hartid == self.hartid;
         if rt {
+            self.hartid = hartid;
             self.cnt += 1;
         }
         self.mutex.unlock();

@@ -39,8 +39,7 @@ impl Element{
 /// 
 
 impl Draw for Element {
-    fn draw_area(&self) {
-        println!("x {}, y {}", self.x, self.y);
+    fn draw(&self) {
         let rect = Rect{
             x1 : self.x,
             y1 : self.y,
@@ -48,7 +47,57 @@ impl Draw for Element {
             y2 : self.y + self.height,
         };
         
-        draw_rect_override(DEVICE_ID, rect, &self.content);
+        draw_rect_override(DEVICE_ID, rect, self.content.addr as *mut Pixel);
+    }
+
+    fn fill_font(&self, c : usize, x : usize, y : usize, foreground : Pixel, background : Pixel) {
+        let font = FONT_ASCII[c % 256];
+        let mut row = 0;
+        unsafe {
+            let ptr = self.content.addr as *mut Pixel;
+            for yy in y..(y + 16) {
+                if yy >= self.height as usize {
+                    break;
+                }
+                let h = yy * self.width as usize;
+                let mut col = 0;
+                for xx in x..(x + 8) {
+                    let v;
+                    // println!("col {}", col);
+                    if font[row] & (1 << (7 - col)) != 0 {
+                        v = foreground;
+                    }
+                    else {
+                        v = background;
+                    }
+                    ptr.add(xx + h).write(v);
+                    col += 1;
+                }
+                row += 1;
+            }
+            
+        }
+    }
+
+    fn draw_area(&self, rect : Rect) {
+        let mut rect = rect;
+        if rect.x2 > self.x + self.width {
+            rect.x2 = self.x + self.width;
+        }
+        if rect.y2 > self.y + self.height {
+            rect.y2 = self.y + self.height;
+        }
+        let r = Rect{
+            x1 : self.x + rect.x1,
+            y1 : self.y + rect.y1,
+            x2 : self.x + rect.x2 - rect.x1,
+            y2 : self.y + rect.y2 - rect.y1,
+        };
+        let ptr;
+        unsafe {
+            ptr = (self.content.addr as *mut Pixel).add((rect.x1 + rect.y1 * self.width) as usize);
+        }
+        draw_rect_override(DEVICE_ID, r, ptr as *mut Pixel);
     }
 }
 
@@ -142,7 +191,7 @@ use core::{intrinsics::sqrtf64, mem::size_of};
 
 use gpu_device::{Pixel, Rect};
 
-use crate::{memory::block::new_block, virtio::gpu_device::{draw_rect_override}, uart};
+use crate::{libs::font::FONT_ASCII, memory::block::new_block, uart, virtio::gpu_device::{draw_rect_override}};
 use crate::virtio::gpu_device;
 
 use super::{element::{Draw, Element}, mask::Circle, transform::ElemTranform};

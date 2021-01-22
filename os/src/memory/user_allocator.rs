@@ -17,20 +17,20 @@ pub struct MemoryList{
 impl MemoryList {
     /// 根据大小新建一个，结构体本身存放在内核堆内存里，用户所需在用户内存中申请
     pub fn new(size : usize, is_kernel : bool) -> *mut Self {
-        let rt = global_allocator::alloc_kernel(size_of::<Self>()) as *mut Self;
+        let rt = global_allocator::alloc(size_of::<Self>(), true) as *mut Self;
         if rt.is_null() {
             return null_mut();
         }
         unsafe {
             (*rt).next = null_mut();
             if is_kernel {
-                (*rt).phy_addr = global_allocator::alloc_kernel(size);
+                (*rt).phy_addr = global_allocator::alloc(size, true);
             }
             else {
-                (*rt).phy_addr = global_allocator::alloc_user(size);
+                (*rt).phy_addr = global_allocator::alloc(size, false);
             }
             if (*rt).phy_addr.is_null() {
-                global_allocator::free_kernel(rt as *mut u8);
+                global_allocator::free(rt as *mut u8);
                 null_mut()
             }
             else {
@@ -42,12 +42,12 @@ impl MemoryList {
     pub fn free(&mut self, is_kernel : bool){
         let a:*mut Self = self;
         if is_kernel{
-            global_allocator::free_kernel(self.phy_addr);
+            global_allocator::free(self.phy_addr);
         }
         else {
-            global_allocator::free_user(self.phy_addr);
+            global_allocator::free(self.phy_addr);
         }
-        global_allocator::free_kernel(a as *mut u8);
+        global_allocator::free(a as *mut u8);
         if !self.next.is_null() {
             unsafe {
                 (*self.next).free(is_kernel);

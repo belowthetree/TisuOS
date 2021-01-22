@@ -148,9 +148,13 @@ impl StatusField {
 pub static mut DEVICE : [DeviceType;9] = [DeviceType::None;9];
 
 pub fn init(){
+    println!("before block");
     block_device::init();
+    println!("before input");
     input_device::init();
+    println!("before gpu");
     gpu_device::init();
+    println!("after other init");
     for i in (VIRTIO_START_ADDR..=VIRTIO_END_ADDR).step_by(VIRTIO_STEP_SIZE){
         let ptr = i as *mut u32;
         let magic;

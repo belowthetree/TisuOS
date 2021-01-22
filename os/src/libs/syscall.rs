@@ -2,7 +2,7 @@
 //! 2021年1月6日 zg
 
 extern "C" {
-    pub fn make_syscall(num : usize, arg1 : usize, arg2 : usize, arg3 : usize, arg4 : usize) -> usize;
+    fn make_syscall(num : usize, arg1 : usize, arg2 : usize, arg3 : usize, arg4 : usize) -> usize;
 }
 
 // #[macro_export]
@@ -31,3 +31,5 @@ pub fn list_thread(){
         make_syscall(5, 0, 0, 0, 0);
     }
 }
+
+// use crate::{cpu, memory::page::TRAP_STACK_END, uart};

@@ -2,9 +2,7 @@
 //! 块内存管理
 //! 使用 Rust 的 Box 容器进行块内存管理，好处在于可以省去内存的回收操作，降低代码复杂度
 //! 2020年12月 zg
-use core::cmp::min;
 
-use alloc::{prelude::v1::*};
 pub struct Block{
     pub addr : *mut u8,
     pub size : usize,
@@ -36,19 +34,20 @@ impl Block {
     }
 }
 
-pub fn new_block(size : usize) -> Box::<Block>{
+pub fn new_block(size : usize) ->Block {
     let b = Block{
-        addr : alloc_kernel(size),
+        addr : alloc(size, true),
         size : size,
     };
     assert!(!b.addr.is_null());
-    Box::new(b)
+    b
 }
 
 impl Drop for Block{
     fn drop(&mut self) {
-        free_kernel(self.addr);
+        free(self.addr);
     }
 }
 
-use super::global_allocator::{alloc_kernel, free_kernel};
+use core::cmp::min;
+use super::global_allocator::{alloc, free};

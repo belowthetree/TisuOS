@@ -46,9 +46,11 @@ pub fn init(){
 pub fn handler(){
     unsafe {
         if let Some(input) = &mut INPUT{
+            // 获取输入
             input.handle_input();
             if let Some(s) = &mut shell::SHELL{
                 for ss in s{
+                    // 告知 Shell
                     ss.handle(input.get_front());
                 }
             }

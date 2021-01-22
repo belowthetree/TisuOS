@@ -138,4 +138,56 @@ impl Key {
             _ => {Key::NONE}
         }
     }
+    pub fn to_char(self)->char {
+        match self {
+            Key::A => {'a'}
+            Key::B => {'b'}
+            Key::C => {'c'}
+            Key::D => {'d'}
+            Key::E => {'e'}
+            Key::F => {'f'}
+            Key::G => {'g'}
+            Key::H => {'h'}
+            Key::I => {'i'}
+            Key::J => {'j'}
+            Key::K => {'k'}
+            Key::L => {'l'}
+            Key::M => {'m'}
+            Key::N => {'n'}
+            Key::O => {'o'}
+            Key::P => {'p'}
+            Key::Q => {'q'}
+            Key::R => {'r'}
+            Key::S => {'s'}
+            Key::T => {'t'}
+            Key::U => {'u'}
+            Key::V => {'v'}
+            Key::W => {'w'}
+            Key::X => {'x'}
+            Key::Y => {'y'}
+            Key::Z => {'z'}
+            Key::ENTER => {'\r'}
+            Key::ONE => {'1'}
+            Key::TWO => {'2'}
+            Key::THREE => {'3'}
+            Key::FOUR => {'4'}
+            Key::FIVE => {'5'}
+            Key::SIX => {'6'}
+            Key::SEVEN => {'7'}
+            Key::EIGHT => {'8'}
+            Key::NINE => {'9'}
+            Key::ZERO => {'0'}
+            Key::DOT => {'.'}
+            Key::COLON => {';'}
+            Key::SINGLEPOINT => {'\''}
+            Key::BACKSLASH => {'\\'}
+            Key::COMMA => {','}
+            Key::SLASH => {'/'}
+            Key::SPACE => {' '}
+            Key::MINUS => {'-'}
+            Key::EQUAL => {'='}
+            Key::TAB => {'\t'}
+            _ => {' '}
+        }
+    }
 }

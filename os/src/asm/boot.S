@@ -15,8 +15,8 @@ _start:
 .option pop
 	# 让其它（非0号）硬件线程挂起，跳转至 3
 	csrr	t0, mhartid
-	bnez	t0, 3f
 	csrw	satp, zero
+	bnez	t0, 3f
 	# 将 BSS 段清零
 	la 		a0, _bss_start
 	la		a1, _bss_end
@@ -41,7 +41,7 @@ _start:
 3:
 	# 不同核心栈区分开
 	la		sp, _stack_end
-	li		t0, 0x10000
+	li		t0, 0x20000
 	csrr	a0, mhartid
 	mul		t0, t0, a0
 	sub		sp, sp, t0

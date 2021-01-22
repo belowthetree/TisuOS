@@ -13,9 +13,8 @@
 #[macro_use]
 extern crate alloc;
 use alloc::{prelude::v1::*};
-
 use interact::shell;
-use core::panic::PanicInfo;
+use core::{panic::PanicInfo};
 
 #[macro_export]
 macro_rules! print {
@@ -70,13 +69,15 @@ extern "C" fn abort() -> !{
 #[no_mangle]
 extern "C" fn kernel_init(){
     Uart::new().init();
-    trap::init();
-    println!("into kernel init");
+    trap::init(0);
     page::init();
     global_allocator::init();
+    println!("trap stack end {:x},
+        kernel heap {:x}, kernel stack {:x}",
+        unsafe{page::TRAP_STACK_END}, unsafe {page::KERNEL_HEAP_START}, unsafe {page::KERNEL_STACK_END});
     println!("finish mem");
-    page_table::init();
     plic::init();
+    println!("before device");
     device::init();
     println!("finish device");
     
@@ -84,14 +85,18 @@ extern "C" fn kernel_init(){
 	buffer::init();
     // test_disk();
     // abort();
-    operation::init();
+    operation::init(); // 文件系统初始化
+    global_allocator::Memory::print();
+    println!("finish filesystem");
     input::init();
 
     gpu_device::reset(0);
+    println!("finish gpu");
 
     shell::init();
-    timer::set_next_interrupt(1);
+    input_buffer::init();
     desktop::desktop::init();
+    timer::set_next_interrupt(1);
     process::start_init_process();
     // process::create_and_add(shell::update as usize, true);
 
@@ -100,13 +105,13 @@ extern "C" fn kernel_init(){
 }
 
 #[no_mangle]
-extern "C" fn kernel_start(){
-    trap::init();
+extern "C" fn kernel_start(hartid : usize){
+    trap::init(hartid);
 }
 #[allow(dead_code)]
 fn test_disk(){
     println!("start test");
-    let buffer1 = global_allocator::alloc_kernel(2048);
+    let buffer1 = global_allocator::alloc(2048, true);
     for i in 0..10{
         unsafe {
             buffer1.add(i).write_volatile(i as u8 + 2);
@@ -127,41 +132,41 @@ fn test_disk(){
         }
     }
 
-    global_allocator::free_kernel(buffer1);
+    global_allocator::free(buffer1);
     println!("finish disk test");
 }
 #[allow(dead_code)]
 fn test_global_allocator(){
     println!("test global_allocator alloc");
-    let a1 = global_allocator::alloc_kernel(4096);
+    let a1 = global_allocator::alloc(4096, true);
     page::print_page_alloc();
     global_allocator::Memory::print();
-    let a2 = global_allocator::alloc_kernel(4096);
-    let a3 = global_allocator::alloc_kernel(4096);
-    let a4 = global_allocator::alloc_kernel(4096);
+    let a2 = global_allocator::alloc(4096, true);
+    let a3 = global_allocator::alloc(4096, true);
+    let a4 = global_allocator::alloc(4096, true);
 
-    let b1 = global_allocator::alloc_user(4096);
-    let b2 = global_allocator::alloc_user(4096);
-    let b3 = global_allocator::alloc_user(4096);
-    let b4 = global_allocator::alloc_user(4096);
+    let b1 = global_allocator::alloc(4096, false);
+    let b2 = global_allocator::alloc(4096, false);
+    let b3 = global_allocator::alloc(4096, false);
+    let b4 = global_allocator::alloc(4096, false);
 
     println!("before delete");
     page::print_page_alloc();
     global_allocator::Memory::print();
 
-    global_allocator::free_kernel(a1);
-    global_allocator::free_kernel(a2);
+    global_allocator::free(a1);
+    global_allocator::free(a2);
 
-    global_allocator::free_user(b1);
-    global_allocator::free_user(b2);
+    global_allocator::free(b1);
+    global_allocator::free(b2);
 
     println!("after delete");
     page::print_page_alloc();
     global_allocator::Memory::print();
-    global_allocator::free_user(b3);
-    global_allocator::free_user(b4);
-    global_allocator::free_kernel(a3);
-    global_allocator::free_kernel(a4);
+    global_allocator::free(b3);
+    global_allocator::free(b4);
+    global_allocator::free(a3);
+    global_allocator::free(a4);
 
     println!("test kernel container");
 
@@ -191,7 +196,10 @@ fn test_global_allocator(){
     }
     println!();
 }
-
+// fn test_syscall(){
+//     let v = Vec::<u32>::new();
+//     for _ in 0..
+// }
 mod uart;
 mod cpu;
 mod interrupt;
@@ -208,10 +216,9 @@ mod libs;
 use task::{process};
 use interact::input;
 use filesystem::{operation};
-use virtio::{block_device::sync_write, buffer, device, gpu_device};
+use virtio::{block_device::sync_write, buffer, device, gpu_device, input::input_buffer};
 use memory::global_allocator;
 use memory::page;
-use memory::page_table;
 use interrupt::trap;
 use interrupt::timer;
 use uart::Uart;

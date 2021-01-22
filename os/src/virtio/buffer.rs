@@ -8,6 +8,7 @@ use crate::{memory::{page::{PAGE_SIZE, alloc_kernel_page}}, sync::{ReadWriteMute
 
 const BUFFER_SIZE : usize = 1024 * 4096; // 4 MB
 const CACHE_SIZE : usize = 2;
+static mut LOCK : ReadWriteMutex = ReadWriteMutex::new();
 static mut COUNTER : usize = 1;
 static mut CACHE : Option<Vec<Buffer>> = None;
 pub static mut DEBUG : bool = false;
@@ -23,7 +24,7 @@ pub struct Buffer{
 
 impl Buffer {
     pub fn new(idx : usize)->Self{
-        let n = BUFFER_SIZE / PAGE_SIZE;
+        let n = (BUFFER_SIZE + PAGE_SIZE - 1) / PAGE_SIZE;
         Self{
             mutex : ReadWriteMutex::new(),
             cnt : 0,
@@ -129,11 +130,13 @@ pub fn write_down_handler(){
     loop {
         unsafe {
             asm!("wfi"::::"volatile");
+            LOCK.read();
             if let Some(cache) = &mut CACHE{
                 for buf in cache{
                     buf.write_down();
                 }
             }
+            LOCK.unlock();
         }
     }
 }
@@ -142,6 +145,9 @@ pub fn sync_read_buffer(block_idx : usize, buffer : *mut u8, size : u32, offset 
     let mut ptr = buffer;
     let mut idx = offset;
     let mut len = size as usize;
+    unsafe {
+        LOCK.write();
+    }
     while len > 0{
         if let Some(buf) = find_buffer(idx){
             buf.copy_to(ptr, idx, len);
@@ -156,12 +162,18 @@ pub fn sync_read_buffer(block_idx : usize, buffer : *mut u8, size : u32, offset 
             new_buffer(block_idx, idx);
         }
     }
+    unsafe {
+        LOCK.unlock();
+    }
 }
 
 pub fn sync_write_buffer(block_idx : usize, buffer : *mut u8, size : u32, offset : usize){
     let mut ptr = buffer;
     let mut idx = offset;
     let mut len = size as usize;
+    unsafe {
+        LOCK.write();
+    }
     while len > 0{
         if let Some(buf) = find_buffer(idx){
             buf.copy_from(ptr, idx, len);
@@ -176,11 +188,17 @@ pub fn sync_write_buffer(block_idx : usize, buffer : *mut u8, size : u32, offset
             new_buffer(block_idx, idx);
         }
     }
+    unsafe {
+        LOCK.unlock();
+    }
 }
 
 pub fn sync_write_zero(block_idx : usize, size : u32, offset : usize){
     let mut idx = offset;
     let mut len = size as usize;
+    unsafe {
+        LOCK.write();
+    }
     while len > 0{
         if let Some(buf) = find_buffer(idx){
             buf.zero(idx, len);
@@ -192,9 +210,12 @@ pub fn sync_write_zero(block_idx : usize, size : u32, offset : usize){
             new_buffer(block_idx, idx);
         }
     }
+    unsafe {
+        LOCK.unlock();
+    }
 }
 
-pub fn new_buffer(block_idx : usize, idx : usize){
+fn new_buffer(block_idx : usize, idx : usize){
     unsafe {
         let mut mix = 0;
         if let Some(cache) = &mut CACHE{
@@ -215,7 +236,7 @@ pub fn new_buffer(block_idx : usize, idx : usize){
     }
 }
 
-pub fn find_buffer<'a>(idx : usize)->Option<&'a mut Buffer>{
+fn find_buffer<'a>(idx : usize)->Option<&'a mut Buffer>{
     unsafe {
         if let Some(cache) = &mut CACHE{
             for buf in cache{

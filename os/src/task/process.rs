@@ -211,12 +211,12 @@ pub static STACK_PAGE_NUM : usize = 16;
 pub static mut PROCESS_LIST : Option<VecDeque::<Process>> = None;
 pub static HEAP_SIZE : usize = 4096;
 pub static PROCESS_NUM_MAX : usize = 100000;
-static mut PROCESS_LIST_LOCK : MultiMutex = MultiMutex::new();
+static mut PROCESS_LIST_LOCK : Mutex = Mutex::new();
 
 pub fn init(){
     println!("init process");
     unsafe {
-        TMP_ENV = global_allocator::alloc_kernel(size_of::<Environment>()) as *mut Environment;
+        TMP_ENV = global_allocator::alloc(size_of::<Environment>(), true) as *mut Environment;
         PROCESS_LIST = Some(VecDeque::new());
     }
     thread::init();
@@ -245,7 +245,7 @@ pub fn start_init_process(){
 /// 从 Sleeping 进入 Scheduling 状态，仅供机器模式使用
 pub fn wake_up(pid : usize){
     unsafe {
-        PROCESS_LIST_LOCK.lock(cpu::get_hartid());
+        PROCESS_LIST_LOCK.lock();
         if let Some(list) = &mut PROCESS_LIST {
             for p in list {
                 if p.pid == pid {
@@ -266,8 +266,7 @@ pub fn create_and_add(func : usize, is_kernel : bool){
 /// 添加进程到调度队列
 pub fn add_process_machine(p : Process) {
     unsafe {
-        let hartid = cpu::get_hartid();
-        PROCESS_LIST_LOCK.lock(hartid);
+        PROCESS_LIST_LOCK.lock();
         if let Some(list) = &mut PROCESS_LIST{
             list.push_back(p);
         }
@@ -281,8 +280,7 @@ pub fn add_process_machine(p : Process) {
 
 pub fn drop_thread(pid : usize, tid : usize){
     unsafe {
-        let hartid = cpu::get_hartid();
-        PROCESS_LIST_LOCK.lock(hartid);
+        PROCESS_LIST_LOCK.lock();
         if let Some(list) = &mut PROCESS_LIST{
             for (idx, p) in list.iter_mut().enumerate(){
                 if p.pid == pid {
@@ -312,12 +310,11 @@ pub fn print(){
     }
 }
 
-pub fn delete_current_process(){
+pub fn delete_current_process(hartid : usize){
     unsafe {
-        let hartid = cpu::get_hartid();
-        PROCESS_LIST_LOCK.lock(hartid);
+        PROCESS_LIST_LOCK.lock();
         if let Some(list) = &mut PROCESS_LIST{
-            let pid = get_current_thread().unwrap().pid;
+            let pid = get_current_thread(hartid).unwrap().pid;
             for (idx, p) in list.iter().enumerate(){
                 if p.pid == pid {
                     for tid in p.tid.iter(){
@@ -335,8 +332,7 @@ pub fn delete_current_process(){
 /// ## 根据 id 获取进程
 pub fn get_process_by_pid<'a>(pid : usize)->Option<&'a mut Process>{
     unsafe {
-        let hartid = cpu::get_hartid();
-        PROCESS_LIST_LOCK.lock(hartid);
+        PROCESS_LIST_LOCK.lock();
         if let Some(list) = &mut PROCESS_LIST{
             for p in list{
                 if p.pid == pid{
@@ -397,7 +393,7 @@ pub fn init_process(){
     }
     Desktop::new();
     if fork() != 0 {
-        desktop::handler();
+        desktop::run();
     }
     // if fork() != 0 {
     //     gpu_device::refresh();
@@ -410,13 +406,14 @@ pub fn init_process(){
 }
 
 extern crate alloc;
-use crate::{libs::syscall};
+use crate::{desktop::desktop::{self, Desktop}, libs::syscall, sync::Mutex};
 use syscall::fork;
 use core::{mem::size_of, ptr::null_mut};
 use alloc::{collections::VecDeque};
 use page::{PAGE_SIZE};
 use page_table::{SATP, PageBit};
-use crate::{cpu, desktop::desktop::{self, Desktop}, interact::shell, interrupt::trap::{Environment, Register}, memory::global_allocator, memory::page_table, memory::user_allocator::MemoryList, page, sync::
-MultiMutex, uart, virtio::buffer};
+use crate::{interact::shell, interrupt::trap::{Environment, Register},
+    memory::global_allocator, memory::page_table, memory::user_allocator::MemoryList, page,
+    uart, virtio::buffer};
 
 use super::thread::{self, Thread};

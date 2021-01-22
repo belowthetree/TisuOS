@@ -48,7 +48,7 @@ impl Button{
         self.background.set_color(color);
     }
     pub fn draw(&self){
-        self.background.draw_area();
+        self.background.draw();
     }
 }
 

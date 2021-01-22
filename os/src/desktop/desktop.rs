@@ -19,15 +19,12 @@ pub struct Desktop{
 
 pub struct Window{
 }
-
-/// ## Bounds
-/// 边缘框，用来检测鼠标的相交信息等
-pub struct Bounds{
-    pub offset_x : u32,
-    pub offset_y : u32,
-    pub width : u32,
-    pub height : u32,
+#[derive(Clone, Copy)]
+pub struct ColorChar{
+    pub color : Pixel,
+    pub c : char,
 }
+
 pub struct Terminal{
     pub x : u32,
     pub y : u32,
@@ -36,6 +33,7 @@ pub struct Terminal{
     pub depth : u32,
     pub head_bar : HeadBar,
     pub text : TextContent,
+    pub shell : InterShell,
     pub id : usize,
 }
 
@@ -43,6 +41,8 @@ pub struct TextContent{
     pub width : u32,
     pub height : u32,
     pub content : Style,
+    pub write_x : usize,
+    pub write_y : usize,
 }
 
 pub struct HeadBar{
@@ -79,19 +79,30 @@ impl Position {
 pub fn init(){
     unsafe {
         DESKTOP = Some(Vec::<Desktop>::new());
+        register(draw);
     }
 }
 
-pub fn handler(){
+pub fn run(){
     unsafe {
-        if let Some(desk) = &mut DESKTOP{
-            loop{
-                asm!("wfi"::::"volatile");
-                DESKTOP_LOCK.lock();
+        loop{
+            asm!("wfi"::::"volatile");
+            DESKTOP_LOCK.lock();
+            if let Some(desk) = &mut DESKTOP{
                 for desktop in desk.iter_mut(){
                     desktop.run();
                 }
-                DESKTOP_LOCK.unlock();
+            }
+            DESKTOP_LOCK.unlock();
+        }
+    }
+}
+
+pub fn draw(){
+    unsafe {
+        if let Some(desk) = &mut DESKTOP{
+            for desktop in desk.iter_mut(){
+                desktop.draw();
             }
         }
     }
@@ -99,17 +110,17 @@ pub fn handler(){
 
 pub fn register_desktop(desktop : Desktop){
     unsafe {
+        DESKTOP_LOCK.lock();
         if let Some(desk) = &mut DESKTOP{
-            DESKTOP_LOCK.lock();
             desk.push(desktop);
-            DESKTOP_LOCK.unlock();
         }
+        DESKTOP_LOCK.unlock();
     }
 }
 
 use alloc::{prelude::v1::*};
-
-use crate::{sync::Mutex, virtio::{gpu_device::{HEIGHT, WIDTH}, input::input_buffer::Point}};
+// use crate::uart;
+use crate::{interact::shell::InterShell, sync::Mutex, virtio::{gpu_device::{HEIGHT, Pixel, WIDTH}, input::input_buffer::{Point, register}}};
 
 use super::{controll::{button::Button, style::style::{Style}}, mouse::Mouse};
 

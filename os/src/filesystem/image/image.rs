@@ -7,7 +7,7 @@ pub struct Image{
     pub width : usize,
     pub height : usize,
     pub format : Format,
-    pub data : Box<Block>
+    pub data : Block,
 }
 
 /// 默认以 Pixel 为单位读写
@@ -45,5 +45,4 @@ pub enum Format{
 
 use core::mem::size_of;
 use crate::{memory::block::{Block, new_block}, virtio::gpu_device::Pixel};
-use alloc::{prelude::v1::*};
 

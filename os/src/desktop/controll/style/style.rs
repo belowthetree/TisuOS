@@ -67,8 +67,8 @@ impl Style {
         self.color = color;
         self.color_style = ColorStyle::SolidColor;
     }
-    pub fn draw_area(&self){
-        self.element.draw_area();
+    pub fn draw(&self){
+        self.element.draw();
     }
     pub fn set_texture(&mut self, image : Image){
         self.color_style = ColorStyle::Texture;

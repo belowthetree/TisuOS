@@ -44,4 +44,6 @@ MEMORY_START: .dword _memory_start
 .global MEMORY_END
 MEMORY_END: .dword _memory_end
 
+.global TRAP_STACK_END
+TRAP_STACK_END: .dword _trap_stack_end
 

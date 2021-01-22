@@ -1,12 +1,4 @@
-#![allow(dead_code)]
 
-pub fn get_hartid() -> usize {
-    unsafe {
-        let id;
-        asm!("csrr $0, mhartid" : "=r"(id));
-        id
-    }
-}
 
 pub fn read_sstatus() -> usize {
     unsafe {
@@ -57,11 +49,8 @@ pub fn read_mscratch() -> usize {
         rt
     }
 }
-
-pub fn write_scratch(val : usize) {
-    unsafe {
-		asm!("csrw	mscratch, $0" ::"r"(val));
-	}
+extern "C" {
+    pub fn write_mscratch(val : usize);
 }
 
 pub fn satp_fence_asid(asid: usize) {
@@ -70,3 +59,10 @@ pub fn satp_fence_asid(asid: usize) {
 	}
 }
 
+pub fn read_sp()->usize{
+    unsafe {
+        let rt;
+        asm!("mv $0, sp" : "=r"(rt));
+        rt
+    }
+}

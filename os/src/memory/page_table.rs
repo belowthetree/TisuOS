@@ -128,6 +128,9 @@ impl PageTable {
     pub fn map_kernel_data(&mut self, virtual_addr : usize, physic_addr : usize){
         self.map(virtual_addr, physic_addr, PageBit::Read.val() | PageBit::Write.val());
     }
+    pub fn map_kernel_code(&mut self, virtual_addr : usize, physic_addr : usize){
+        self.map(virtual_addr, physic_addr, PageBit::Read.val() | PageBit::Excute.val());
+    }
     pub fn map_user_data(&mut self, virtual_addr : usize, physic_addr : usize){
         self.map(virtual_addr, physic_addr, PageBit::Read.val() | PageBit::Write.val() |
             PageBit::User.val());
@@ -236,8 +239,6 @@ pub fn make_satp(pt : usize, asid : usize) -> usize{
     SATP::new(pt, asid, MODE).val()
 }
 
-pub fn init(){
-}
 
 /// ## 将内核代码部分进行映射
 /// 因为进程返回调用了内核中的代码

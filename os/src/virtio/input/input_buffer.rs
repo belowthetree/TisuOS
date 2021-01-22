@@ -6,6 +6,7 @@
 
 use core::ops::Sub;
 
+use alloc::{prelude::v1::*};
 
 const QUEUE_SIZE : usize = 128;
 static mut MOUSE_CUR_IDX : usize = 0;
@@ -17,6 +18,13 @@ pub static mut KEY_RELEASE_GET_IDX : usize = 0;
 static mut MOUSE_POSITION : [Point;QUEUE_SIZE] = [Point::new();QUEUE_SIZE];
 static mut KEY_PRESSED : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE];
 static mut KEY_RELEASE : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE];
+static mut DELEGATE : Option<Vec<fn()>> = None;
+
+pub fn init(){
+    unsafe {
+        DELEGATE = Some(Vec::<fn()>::new());
+    }
+}
 
 pub fn get_mouse_position()->Point{
     unsafe {
@@ -24,14 +32,19 @@ pub fn get_mouse_position()->Point{
         // if MOUSE_CUR_IDX != MOUSE_GET_IDX{
         //     MOUSE_GET_IDX = (MOUSE_GET_IDX + 1) % QUEUE_SIZE;
         // }
-        MOUSE_POSITION[(MOUSE_CUR_IDX + QUEUE_SIZE - 1) % QUEUE_SIZE]
+        MOUSE_POSITION[MOUSE_CUR_IDX]
     }
 }
 
 pub fn add_mouse_position(point : Point){
     unsafe {
-        MOUSE_POSITION[MOUSE_CUR_IDX] = point;
         MOUSE_CUR_IDX = (MOUSE_CUR_IDX + 1) % QUEUE_SIZE;
+        MOUSE_POSITION[MOUSE_CUR_IDX] = point;
+        if let Some(delegate) = &mut DELEGATE {
+            for del in delegate {
+                del();
+            }
+        }
     }
 }
 
@@ -52,6 +65,11 @@ pub fn add_key_press(v : u16){
     unsafe {
         KEY_PRESSED[KEY_PRESS_CUR_IDX] = v;
         KEY_PRESS_CUR_IDX = (KEY_PRESS_CUR_IDX + 1) % QUEUE_SIZE;
+        if let Some(delegate) = &mut DELEGATE {
+            for del in delegate {
+                del();
+            }
+        }
     }
 }
 
@@ -72,6 +90,19 @@ pub fn add_key_release(v : u16){
     unsafe {
         KEY_RELEASE[KEY_RELEASE_CUR_IDX] = v;
         KEY_RELEASE_CUR_IDX = (KEY_RELEASE_CUR_IDX + 1) % QUEUE_SIZE;
+        if let Some(delegate) = &mut DELEGATE {
+            for del in delegate {
+                del();
+            }
+        }
+    }
+}
+
+pub fn register(f : fn()) {
+    unsafe {
+        if let Some(delegate) = &mut DELEGATE {
+            delegate.push(f);
+        }
     }
 }
 

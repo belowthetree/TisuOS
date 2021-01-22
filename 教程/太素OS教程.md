@@ -4,6 +4,12 @@
 
 ## 说明
 
+**注意！！！！！！教程中的章节代码并非最正确的，后期修复了许多 BUG，请以实际的内核源码为准**
+
+**注意！！！！！！教程中的章节代码并非最正确的，后期修复了许多 BUG，请以实际的内核源码为准**
+
+**注意！！！！！！教程中的章节代码并非最正确的，后期修复了许多 BUG，请以实际的内核源码为准**
+
 太素 OS 是一个 RISCV 架构的 Rust 编写的系统内核（当然比较简陋，甚至只能在 QEMU 上运行）。本项目实现了
 
 * 外部设备控制，包括：
@@ -1187,6 +1193,23 @@ fn switch_next(){
 }
 ```
 
+### fork 的方式
+
+在 Linux 中有一种系统调用称为 `fork`，从原来的代码处创建一个新的线程，调用线程获取的返回值和新线程获取的返回值不同。这种方法相对比直接从一个函数开始创建新的线程有好有坏。
+
+好处是保留了上下文环境，可以执行一些结构体的方法（rust 不允许你获取一个结构体的方法的地址）。坏处是你需要拷贝原线程的栈，造成了栈空间的浪费。
+
+本项目实现了这种方法用来创建新线程，在 `init_process` 中创建了几个线程
+
+```rust
+if fork() != 0 {
+    shell::update();
+}
+if fork() != 0{
+    buffer::write_down_handler();
+}
+```
+
 ## 第八章-块设备
 
 ### 知识预备
@@ -1412,6 +1435,8 @@ pub struct Buffer{
 > https://blog.csdn.net/yangsongqbs/article/details/7796921 
 >
 > https://www.cnblogs.com/Chary/p/12981056.html
+>
+> 这一章需要读者自己格式化一块 fat32 格式的硬盘镜像。可以在 Linux 中挂载镜像，然后用命令进行格式化
 
 ### 知识预备
 
@@ -1599,4 +1624,95 @@ pub struct File{
 * 写入
 
 自此，所有磁盘操作被抽象成了文件操作
+
+## 第十章-命令行交互
+
+现在我们已经有了文件系统，但是对于它的测试仍然只能通过在代码里写入固定的指令，没有操作感。这章实现一个交互系统用于调试各种功能。
+
+具体的思路是：
+
+1. 设计一个输入系统，保存所有的命令行输入
+2. 设计一个处理系统，这里称它为 `Shell`，一个壳
+3. `Shell` 从输入系统获取输入，然后判断执行哪个命令
+
+### 输入触发系统
+
+交互需要获取输入信息，并且要保证在获取输入信息后能够响应。所以这个输入系统需要读取 uart 的信息，然后可以通知处理系统获取到的系统。
+
+```rust
+pub struct Input{
+    pub idx : usize,
+    pub cnt : usize,
+    pub list : [char;CHAR_LEN],
+}
+impl Input {
+    pub fn handle_input(&mut self){
+        let art = Uart::new();
+        if let Some(c) = art.get(){
+            self.add(c as char);
+        }
+    }
+    // .......
+}
+
+pub fn handler(){
+    unsafe {
+        if let Some(input) = &mut INPUT{
+            // 获取输入
+            input.handle_input();
+            if let Some(s) = &mut shell::SHELL{
+                for ss in s{
+                    // 告知 Shell
+                    ss.handle(input.get_front());
+                }
+            }
+        }
+    }
+}
+```
+
+这个 `handler` 函数由 `plic` 调用，当有 uart 中断产生时会调用。
+
+### Shell
+
+`src/interact/shell.rs`
+
+```rust
+impl Shell {
+    pub fn update(&mut self) {
+        if self.input_list.len() > 0 {
+            let c = &self.input_list[(self.input_list.len() - 1)..];
+            if c == "\r" || c == "\n"{
+                self.handle_cmd(&self.input_list[..self.input_list.len() - 1].to_string());
+
+                self.input_list.clear();
+            }
+        }
+    }
+    pub fn handle(&mut self, c : char){
+        output(c as u8);
+        if c as u8 == 127 && self.input_list.len() > 0{
+            self.input_list.pop();
+        }
+        else{
+            self.input_list.push(c);
+        }
+    }
+}
+/// ## Update
+/// 遍历所有 Shell 并调用它们的 update 函数
+/// 会作为独立进程挂载，为了避免出现问题同时节省 CPU 消耗，触发中断前阻塞
+pub fn update(){
+    loop{
+        unsafe{asm!("wfi"::::"volatile");}
+        if let Some(s) = unsafe {&mut SHELL}{
+            for f in s{
+                f.update();
+            }
+        }
+    }
+}
+```
+
+`Update` 函数会挂载在新的线程中，不断判断输入是否构成一个命令
 

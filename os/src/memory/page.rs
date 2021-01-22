@@ -18,7 +18,8 @@ extern "C" {
 	pub static HEAP_START: usize;
     pub static HEAP_SIZE: usize;
     pub static MEMORY_START: usize;
-    pub static MEMORY_END: usize;
+	pub static MEMORY_END: usize;
+	pub static TRAP_STACK_END : usize;
 }
 
 use crate::uart;
@@ -92,7 +93,7 @@ impl Page {
 }
 
 pub const  PAGE_SIZE : usize = 4096;
-pub const KERNEL_PAGE_NUM : usize = 20480;
+pub const KERNEL_PAGE_NUM : usize = 51200;
 pub static mut PAGES : *mut Page = null_mut();
 pub static mut TOTAL_PAGE : usize = 0;
 pub static mut NUM_RESERVE : usize = 0;

@@ -1,9 +1,11 @@
+# trap.S
+# Trap handler and global context
+# 借用 Stephen Marz 的设计
+# 2020年12月
 .option norvc
 .altmacro
 .set NUM_GP_REGS, 32  # Number of registers per context
-.set NUM_FP_REGS, 32
 .set REG_SIZE, 8   # Register size (in bytes)
-.set MAX_CPUS, 8   # Maximum number of CPUs
 
 # Use macros for saving and restoring multiple registers
 .macro save_gp i, basereg=t6
@@ -19,7 +21,6 @@
 	fld	f\i, ((NUM_GP_REGS+(\i))*REG_SIZE)(\basereg)
 .endm
 
-
 .section .text
 .global m_trap_vector
 # This must be aligned by 4 since the last two bits
@@ -28,15 +29,9 @@
 .align 4
 m_trap_vector:
 	csrrw	t6, mscratch, t6
-	.set 	i, 1
-	.rept	30
-		save_gp	%i
-		.set	i, i+1
-	.endr
-	
 	.set 	i, 0
-	.rept	32
-		save_fp	%i
+	.rept	31
+		save_gp	%i
 		.set	i, i+1
 	.endr
 	
@@ -45,10 +40,19 @@ m_trap_vector:
 	save_gp 31, t5
 
 	csrw	mscratch, t5
+
+	.set 	i, 0
+	.rept	32
+		save_fp	%i, t5
+		.set	i, i+1
+	.endr
+	
 	csrr	t0, mepc
 	sd		t0, 520(t5)
 	csrr	t1, satp
 	sd		t1, 512(t5)
+	csrr	t2, mhartid
+	sd		t2, 528(t5)
 
 	# Get ready to go into Rust (trap.rs)
 	# We don't want to write into the user's stack or whomever
@@ -58,12 +62,12 @@ m_trap_vector:
 	csrr	a2, mhartid
 	csrr	a3, mstatus
 	mv		a4, sp
-	la		t0, _trap_stack_end
-	li		t1, 0x10000
+	csrr	a5, mtval
+	la		sp, _trap_stack_end
+	li		t1, 0x20000
 	mul		t1, t1, a2
-	sub		sp, t0, t1
+	sub		sp, sp, t1
 	call	m_trap
-
 	# When we get here, we've returned from m_trap, restore registers
 	# and return.
 	# m_trap will return the return address via a0.
@@ -79,14 +83,18 @@ m_trap_vector:
 		.set i, i+1
 	.endr
 	# Restore all GP registers
-	.set	i, 1
-	.rept	31
+	.set	i, 0
+	.rept	32
 		load_gp %i
 		.set	i, i+1
 	.endr
 
 	mret
 
+.global waiting
+waiting:
+	wfi
+	j waiting
 
 .global make_syscall
 make_syscall:
@@ -102,8 +110,8 @@ switch_user_process:
 	ld		t1, 520(t6)
 	csrw 	mepc, t1
 
-	li		t1, 0xaaa
-	csrw	mie, t1
+	# li		t1, 0xaaa
+	# csrw	mie, t1
 	la		t2, m_trap_vector
 	csrw	mtvec, t2
 	li		t3, 1 << 4 | 1 << 13
@@ -117,7 +125,7 @@ switch_user_process:
 	
 	# Restore all GP registers
 	.set	i, 1
-	.rept	30
+	.rept	31
 		load_gp %i
 		.set	i, i+1
 	.endr
@@ -132,8 +140,8 @@ switch_kernel_process:
 	ld		t1, 520(t6)
 	csrw 	mepc, t1
 
-	li		t1, 0xaaa
-	csrw	mie, t1
+	# li		t1, 0xaaa
+	# csrw	mie, t1
 	la		t2, m_trap_vector
 	csrw	mtvec, t2
 	li		t3, 1 << 5 | 1 << 13 | 1 << 11
@@ -147,7 +155,7 @@ switch_kernel_process:
 	
 	# Restore all GP registers
 	.set	i, 1
-	.rept	30
+	.rept	31
 		load_gp %i
 		.set	i, i+1
 	.endr
@@ -171,4 +179,9 @@ process_exit:
 thread_exit:
 	li	a0, 61
 	ecall
+	ret
+
+.global write_mscratch
+write_mscratch:
+	csrw	mscratch, a0
 	ret

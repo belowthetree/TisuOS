@@ -5,7 +5,6 @@
 pub fn handler(env : &Environment) -> usize {
     let mut rt = 0;
     let num = env.regs[Register::A0.val()];
-    // println!("syscall {}", num);
     match num {
         1 => {
             println!("syscall test");
@@ -14,7 +13,7 @@ pub fn handler(env : &Environment) -> usize {
             // 设置 timer 触发
         }
         3 => {
-            rt = cpu::get_hartid();
+            panic!("shei gan diaoyong {}", 0);
         }
         4 => {
             exec(env.regs[Register::A1.val()], env.regs[Register::A2.val()],
@@ -24,16 +23,20 @@ pub fn handler(env : &Environment) -> usize {
             process::print();
             thread::print();
         }
+        6 => {
+            // rt = global_allocator::alloc(env.regs[Register::A1.val()], true) as usize;
+        }
         57 => {
-            let t = get_current_thread().unwrap();
+            let t = get_current_thread(env.hartid).unwrap();
             fork(env, t);
         }
         60 => {
-            process::delete_current_process();
+            println!("delete process");
+            process::delete_current_process(env.hartid);
             thread::schedule(env);
         }
         61 => {
-            thread::delete_current_thread();
+            thread::delete_current_thread(env.hartid);
             thread::schedule(env);
         }
         _ => {}
@@ -59,7 +62,7 @@ fn exec(func : usize, satp : usize, is_kernel : bool){
 use process::{add_process_machine, get_process_by_pid};
 use thread::{Thread};
 
-use crate::{cpu, task::{process::{Process, self}, thread::{self, get_current_thread}}};
+use crate::{task::{process::{Process, self}, thread::{self, get_current_thread}}};
 use crate::uart;
 
 use super::trap::{Environment, Register};

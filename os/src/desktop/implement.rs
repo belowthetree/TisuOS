@@ -17,7 +17,7 @@ impl Desktop {
             back.set_texture(image);
         }
         back.resize(WIDTH as u32, HEIGHT as u32);
-        let rt = Self{
+        let mut rt = Self{
             valid : false,
             mouse : Mouse::new(),
             background : back,
@@ -26,25 +26,27 @@ impl Desktop {
             window : Vec::<Window>::new(),
             cnt : 0,
         };
+        rt.draw();
         register_desktop(rt);
     }
     pub fn run(&mut self){
         self.get_input();
         if !self.valid {
-            self.draw();
+            self.remove_window();
+        }
+    }
+    pub fn draw(&mut self){
+        if !self.valid{
+            self.background.draw();
+            for term in self.terminal.iter(){
+                term.draw();
+            }
+            for window in self.window.iter(){
+                window.draw();
+            }
+            invalid();
             self.valid = true;
         }
-        self.remove_window();
-    }
-    pub fn draw(&self){
-        self.background.draw_area();
-        for term in self.terminal.iter(){
-            term.draw();
-        }
-        for window in self.window.iter(){
-            window.draw();
-        }
-        refresh();
     }
     pub fn setup_background(&mut self, path : &String){
         let file = open(path).unwrap();
@@ -65,8 +67,13 @@ impl Desktop {
                 match key {
                     Key::MouseLeft | Key::MouseRight | Key::MouseMid => {
                         self.mouse.get_key_down(key);
+                        self.valid = false;
                     }
                     _ => {
+                        if let Some(term) = self.terminal.last_mut() {
+                            term.input(key.to_char());
+                            self.valid = false;
+                        }
                     }
                 }
             }
@@ -95,11 +102,11 @@ impl Desktop {
         self.mouse.update_position();
         loop{
             let e = self.mouse.get_event();
+            // println!("{:?}", e);
             if e == MouseEvent::None{
                 break;
             }
             self.cmd(e);
-            // println!("{:?}", e);
         }
     }
     pub fn cmd(&mut self, event : MouseEvent){
@@ -110,11 +117,13 @@ impl Desktop {
             }
             MouseEvent::LeftClick => {
                 if let Some(_) = self.select_window(self.mouse.pre_pos){
+                    self.valid = false;
                 }
             }
             MouseEvent::Drag => {
                 let dir = self.mouse.get_move_dir();
-                if let Some(term) = self.select_window(self.mouse.pre_pos){
+                if let Some(idx) = self.select_window(self.mouse.pre_pos){
+                    let term = self.terminal.get_mut(idx).unwrap();
                     term.translate(dir.0, dir.1);
                     self.valid = false;
                 }
@@ -122,12 +131,14 @@ impl Desktop {
             _ => {}
         }
     }
-    pub fn select_window<'a>(&'a mut self, point : Point)->Option<&'a mut Terminal>{
+    pub fn select_window(&mut self, point : Point)->Option<usize>{
         let point = Position::from_point(point);
         if self.terminal.len() > 0 {
-            for term in self.terminal.iter_mut(){
+            for (idx, term) in self.terminal.iter_mut().rev().enumerate(){
                 if term.detect(point) {
-                    return Some(term);
+                    let len = self.terminal.len();
+                    self.terminal.swap(len - 1, len - idx - 1);
+                    return Some(len - 1);
                 }
             }
             None
@@ -195,7 +206,8 @@ impl Terminal {
             height : height,
             depth : 0,
             head_bar : HeadBar::new(x, y, width, HEADBAR_HEIGHT),
-            text : TextContent::new(x, y, width, height),
+            text : TextContent::new(x, y + HEADBAR_HEIGHT, width, height - HEADBAR_HEIGHT),
+            shell : InterShell::new(),
             id : id,
         };
         rt
@@ -206,6 +218,13 @@ impl Terminal {
     }
     pub fn is_close(&self)->bool{
         self.head_bar.close_button.click
+    }
+    pub fn input(&mut self, c : char){
+        self.shell.input(c);
+        self.text.putchar(c);
+        for c in self.shell.pop_output(){
+            self.text.putchar_color(c.c, c.color);
+        }
     }
 }
 
@@ -256,16 +275,75 @@ impl Transform for Terminal {
 impl TextContent {
     pub fn new(x : u32, y : u32, width : u32, height : u32)->Self{
         let color = ColorStyle::SolidColor;
-        let mut content = Style::new(color, x, y + HEADBAR_HEIGHT, width, height - HEADBAR_HEIGHT);
-        content.set_color(Pixel::green());
-        Self{
+        let mut content = Style::new(color, x, y, width, height);
+        content.set_color(Pixel::black());
+        let mut rt = Self{
             width : width,
             height : height,
-            content : content
-        }
+            content : content,
+            write_x : 0,
+            write_y : 0,
+        };
+        rt.putchar_color('=', Pixel::green());
+        rt.putchar_color(':', Pixel::green());
+        rt
     }
     pub fn draw(&self){
-        self.content.draw_area();
+        self.content.draw();
+    }
+    pub fn putchar(&mut self, c : char){
+        if c == '\n' || c == '\r' {
+            self.write_y += 16;
+            self.write_x = 0;
+            self.new_line();
+            self.putchar_color('=', Pixel::green());
+            self.putchar_color(':', Pixel::green());
+            return;
+        }
+        if self.write_y >= self.height as usize - 16 {
+            self.new_line();
+        }
+        self.content.element.fill_font(c as usize, self.write_x, self.write_y,
+            Pixel::white(), Pixel::black());
+        self.write_x += 8;
+        self.write_y += ((self.write_x + 8) / self.width as usize) * 16;
+        if self.write_x + 8 > self.width as usize{
+            self.write_x = 0;
+        }
+    }
+    pub fn putchar_color(&mut self, c : char, color : Pixel){
+        if c == '\n' || c == '\r' {
+            self.write_y += 16;
+            self.write_x = 0;
+            self.new_line();
+            self.putchar_color('=', Pixel::green());
+            self.putchar_color(':', Pixel::green());
+            return;
+        }
+        if self.write_y >= self.height as usize - 16 {
+            self.new_line();
+        }
+        self.content.element.fill_font(c as usize, self.write_x, self.write_y,
+            color, Pixel::black());
+        self.write_x += 8;
+        self.write_y += ((self.write_x + 8) / self.width as usize) * 16;
+        if self.write_x + 8 > self.width as usize{
+            self.write_x = 0;
+        }
+    }
+    pub fn new_line(&mut self){
+        if self.write_y >= self.height as usize - 16 {
+            self.write_y -= 16;
+            unsafe {
+                let ptr = self.content.element.content.addr as *mut Pixel;
+                ptr.copy_from(ptr.add(self.width as usize * 16),
+                (self.width * self.height) as usize);
+                let ptr = ptr.add((self.width * self.height) as usize);
+                for i in 0..self.width as usize{
+                    ptr.add(i).write(Pixel::black());
+                }
+            }
+        }
     }
 }
 
@@ -328,7 +406,7 @@ impl HeadBar {
         }
     }
     pub fn draw(&self){
-        self.background.draw_area();
+        self.background.draw();
         self.close_button.draw();
     }
 }
@@ -373,8 +451,11 @@ impl Transform for HeadBar {
     }
 }
 
-use crate::{filesystem::{file::OpenFlag, image::bmp::generate_image, interface::open}, virtio::{gpu_device::{HEIGHT, Pixel, WIDTH, refresh}, input::{input_buffer::{Point, get_key_press, get_key_release}, keyboard::Key}}};
+use crate::{filesystem::{file::OpenFlag, image::bmp::generate_image, interface::open}, graphic::element::Draw, interact::shell::{InterShell}, virtio::{gpu_device::{HEIGHT, Pixel,
+    WIDTH, invalid}, input::{input_buffer::{Point, get_key_press, get_key_release},
+    keyboard::Key}}};
 use crate::uart;
 use super::{controll::{button::{BUTTON_WIDTH, Button}, style::style::{ColorStyle, Style}},
-    desktop::{Desktop, Dock, HeadBar, Position, Terminal, TextContent, Window, register_desktop}, desktop_trait::{Transform}, mouse::{Mouse, MouseEvent}};
+    desktop::{Desktop, Dock, HeadBar, Position, Terminal, TextContent, Window, register_desktop},
+    desktop_trait::{Transform}, mouse::{Mouse, MouseEvent}};
 use alloc::{prelude::v1::*};

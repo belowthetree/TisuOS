@@ -628,7 +628,7 @@ impl Attribute{
 pub struct BPB {
     pub bytes_per_sector    : u16,
     pub sector_per_cluster  : u8,
-    pub reserved_sector     : u16,
+    pub reserved_sector     : u16, // 第一个簇之前的所有扇区都是保留扇区
     pub fat_num             : u8,
     pub root_entry          : u16, // fat32 不使用
     pub total_sector1       : u16, // 如果为 0，使用 total_sector2中的值

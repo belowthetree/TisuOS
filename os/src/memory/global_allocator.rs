@@ -331,10 +331,12 @@ impl Memory {
         unsafe {
             let mut head = KERNEL_MEMORY.next;
             while !head.is_null() {
+                println!("kernel size {}, free {}, used {}", (*head).size, (*head).free_cnt, (*head).total_cnt - (*head).free_cnt);
                 head = (*head).next;
             }
             head = USER_MEMORY.next;
             while !head.is_null() {
+                println!("user size {}, free {}, used {}", (*head).size, (*head).free_cnt, (*head).total_cnt - (*head).free_cnt);
                 head = (*head).next;
             }
         }
@@ -371,6 +373,7 @@ pub static mut KERNEL_HEAP_START : *mut u8 = null_mut();
 pub static KERNEL_HEAP_NUM_PAGE : usize = 5;
 pub static mut MEMORY_BLOCK_A_LITTLE_BIG : usize= 0;
 pub static mut MEMORY_BLOCK_A_TOO_BIG : usize= 0;
+static mut MEMORY_LOCK : Mutex = Mutex::new();
 
 /// ## 初始化
 pub fn init(){
@@ -381,10 +384,42 @@ pub fn init(){
         USER_MEMORY.page.set_user_read_write();
     }
 }
-
+pub fn alloc(size : usize, is_kernel : bool)->*mut u8{
+    unsafe {
+        MEMORY_LOCK.lock();
+    }
+    let rt;
+    if is_kernel{
+        rt = alloc_kernel(size);
+    }
+    else {
+        rt = alloc_user(size);
+    }
+    unsafe {
+        MEMORY_LOCK.unlock();
+    }
+    rt
+}
+pub fn free(addr : *mut u8){
+    unsafe {
+        MEMORY_LOCK.lock();
+    }
+    if addr as usize >= unsafe {page::KERNEL_HEAP_START} && unsafe {page::USER_HEAP_START} > addr as usize {
+        free_kernel(addr);
+    }
+    else if unsafe {page::USER_HEAP_START} <= addr as usize {
+        free_user(addr);
+    }
+    else {
+        panic!("free addr err {:x}", addr as usize);
+    }
+    unsafe {
+        MEMORY_LOCK.unlock();
+    }
+}
 /// ## alloc kernel
 /// 在内核页表申请内存，暂不清空内存
-pub fn alloc_kernel(size : usize) -> *mut u8{
+fn alloc_kernel(size : usize) -> *mut u8{
     assert!(size > 0);
     let rt = unsafe {Memory::alloc(size, &mut KERNEL_MEMORY)};
     if rt.is_null(){
@@ -394,13 +429,16 @@ pub fn alloc_kernel(size : usize) -> *mut u8{
         unsafe {
             rt.write_bytes(0, size);
         }
+        if unsafe {page::KERNEL_HEAP_START} > rt as usize || unsafe {page::USER_HEAP_START} <= rt as usize {
+            panic!("out memory {:x} {:x}", unsafe {page::KERNEL_HEAP_START}, rt as usize);
+        }
         rt
     }
 }
 
 /// ## alloc user
 /// 在用户页表申请内存，同上
-pub fn alloc_user(size : usize) -> *mut u8{
+fn alloc_user(size : usize) -> *mut u8{
     assert!(size > 0);
     let rt = unsafe {Memory::alloc(size, &mut USER_MEMORY)};
     if rt.is_null(){
@@ -414,11 +452,11 @@ pub fn alloc_user(size : usize) -> *mut u8{
     }
 }
 
-pub fn free_user(addr : *mut u8) {
+fn free_user(addr : *mut u8) {
     unsafe {Memory::free(addr, &mut USER_MEMORY)};
 }
 
-pub fn free_kernel(addr : *mut u8){
+fn free_kernel(addr : *mut u8){
     unsafe {
         Memory::free(addr, &mut KERNEL_MEMORY);
     }
@@ -430,11 +468,11 @@ pub fn free_kernel(addr : *mut u8){
 struct OSGlobalAlloc;
 unsafe impl GlobalAlloc for OSGlobalAlloc {
     unsafe fn alloc(&self, layout : Layout) -> *mut u8{
-        alloc_kernel(layout.size())
+        alloc(layout.size(), true)
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        free_kernel(ptr);
+        free(ptr);
     }
 }
 
@@ -447,5 +485,5 @@ pub fn alloc_error(layout : Layout) -> !{
 }
 
 use core::alloc::{GlobalAlloc, Layout};
-use crate::uart;
+use crate::{sync::Mutex, uart};
 use crate::page;
