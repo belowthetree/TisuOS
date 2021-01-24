@@ -205,7 +205,7 @@ impl Drop for Process{
     }
 }
 
-static mut TMP_ENV : *mut Environment = null_mut();
+static mut TMP_ENV : [*mut Environment;4] = [null_mut();4];
 pub static mut PID_CNT : usize = 1;
 pub static STACK_PAGE_NUM : usize = 16;
 pub static mut PROCESS_LIST : Option<VecDeque::<Process>> = None;
@@ -216,7 +216,9 @@ static mut PROCESS_LIST_LOCK : Mutex = Mutex::new();
 pub fn init(){
     println!("init process");
     unsafe {
-        TMP_ENV = global_allocator::alloc(size_of::<Environment>(), true) as *mut Environment;
+        for i in 0..4{
+            TMP_ENV[i] = global_allocator::alloc(size_of::<Environment>(), true) as *mut Environment;
+        }
         PROCESS_LIST = Some(VecDeque::new());
     }
     thread::init();
@@ -232,11 +234,10 @@ pub fn start_init_process(){
     unsafe {
         if let Some(p) = Process::new(init_process as usize, true) {
             if let Some(list) = &mut PROCESS_LIST{
-                (*TMP_ENV).copy(&p.first_thread().env);
-                p.first_thread().state = ThreadState::Running;
+                (*TMP_ENV[0]).copy(&p.first_thread().env);
                 run(*p.tid.first().unwrap());
                 list.push_front(p);
-                switch_kernel_process(TMP_ENV as *mut u8);
+                switch_kernel_process(TMP_ENV[0] as *mut u8);
             }
         }
     }
@@ -395,6 +396,9 @@ pub fn init_process(){
     if fork() != 0 {
         desktop::run();
     }
+    println!("before set");
+    timer::set_next_interrupt(1);
+    println!("after set");
     // if fork() != 0 {
     //     gpu_device::refresh();
     // }
@@ -406,7 +410,7 @@ pub fn init_process(){
 }
 
 extern crate alloc;
-use crate::{desktop::desktop::{self, Desktop}, libs::syscall, sync::Mutex};
+use crate::{desktop::desktop::{self, Desktop}, interrupt::timer, libs::syscall, sync::Mutex};
 use syscall::fork;
 use core::{mem::size_of, ptr::null_mut};
 use alloc::{collections::VecDeque};

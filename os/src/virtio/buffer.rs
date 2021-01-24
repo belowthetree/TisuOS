@@ -112,7 +112,6 @@ impl Buffer {
     }
 }
 
-
 pub fn init(){
     unsafe {
         let mut v = Vec::<Buffer>::new();

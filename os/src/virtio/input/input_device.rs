@@ -93,8 +93,8 @@ impl InputDevice {
         let eq = alloc_kernel_page(n) as *mut Queue;
         let sq = alloc_kernel_page(n) as *mut Queue;
         unsafe {
-            ptr.add(Offset::QueueSel.scale32()).write_volatile(0);
             ptr.add(Offset::GuestPageSize.scale32()).write_volatile(PAGE_SIZE as u32);
+            ptr.add(Offset::QueueSel.scale32()).write_volatile(0);
             ptr.add(Offset::QueuePfn.scale32()).write_volatile(eq as u32 / PAGE_SIZE as u32);
             ptr.add(Offset::QueueSel.scale32()).write_volatile(1);
             ptr.add(Offset::QueuePfn.scale32()).write_volatile(sq as u32 / PAGE_SIZE as u32);
@@ -162,6 +162,12 @@ impl InputDevice {
                         KEY_EVENTS.replace(ev);	
                     },
                     EventType::Rel => {
+                        if (*event).value == 1{
+                            add_scroll(1);
+                        }
+                        else {
+                            add_scroll(2);
+                        }
                     }
                     _ => {
                     }
@@ -251,5 +257,5 @@ use crate::virtio::{device::{Descriptor, Offset, Queue, StatusField, VIRTIO_DESC
 use crate::{memory::{global_allocator::{alloc}},
     page::{PAGE_SIZE, alloc_kernel_page}, uart};
 
-use super::input_buffer::{Point, add_key_press, add_key_release, add_mouse_position};
+use super::input_buffer::{Point, add_key_press, add_key_release, add_mouse_position, add_scroll};
 

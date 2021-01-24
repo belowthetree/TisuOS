@@ -18,7 +18,7 @@ pub enum ColorStyle{
 const DEFAULT_COLOR : Pixel = Pixel{r:122,g:122,b:255,a:255};
 
 impl Style {
-    pub fn new(color_style : ColorStyle, x:u32, y:u32, width : u32, height : u32)->Self{
+    pub fn new(color_style : ColorStyle, x:usize, y:usize, width : usize, height : usize)->Self{
         let mut elem = Element::new(x, y, width, height);
         elem.fill(DEFAULT_COLOR);
         Self{
@@ -38,7 +38,7 @@ impl Style {
             element : elem,
         }
     }
-    pub fn resize(&mut self, width : u32, height : u32){
+    pub fn resize(&mut self, width : usize, height : usize){
         self.element.resize(width, height);
         match self.color_style {
             ColorStyle::SolidColor => {
@@ -70,14 +70,18 @@ impl Style {
     pub fn draw(&self){
         self.element.draw();
     }
+    pub fn draw_blend(&self){
+        self.element.draw_blend();
+    }
     pub fn set_texture(&mut self, image : Image){
         self.color_style = ColorStyle::Texture;
         self.texture = Some(image);
+        self.resize(self.element.width, self.element.height);
     }
 }
 
 impl Transform for Style{
-    fn set_position(&mut self, x : u32, y : u32) {
+    fn set_position(&mut self, x : usize, y : usize) {
         self.element.x = x;
         self.element.y = y;
     }
@@ -94,17 +98,20 @@ impl Transform for Style{
         self.element.x <= x && self.element.y <= y && self.element.x + self.element.width >= x && self.element.y + self.element.height >= y
     }
 
-    fn translate(&mut self, x : i32, y : i32) {
-        let mut x = self.element.x as i32 + x;
-        let mut y = self.element.y as i32 + y;
+    fn translate(&mut self, x : isize, y : isize) {
+        let mut x = self.element.x as isize + x;
+        let mut y = self.element.y as isize + y;
         if x < 0{
             x = 0;
         }
         if y < 0{
             y = 0;
         }
-        self.element.x = x as u32;
-        self.element.y = y as u32;
+        self.element.x = x as usize;
+        self.element.y = y as usize;
+    }
+
+    fn refresh(&mut self) {
     }
 }
 

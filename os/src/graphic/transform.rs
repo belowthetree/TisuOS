@@ -5,7 +5,8 @@
 
 
 pub trait ElemTranform {
-    fn set_position(&mut self, x : u32, y : u32);
+    fn set_position(&mut self, x : usize, y : usize);
+    fn translate(&mut self, x : isize, y : isize);
 }
 
 

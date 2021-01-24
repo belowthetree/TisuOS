@@ -13,6 +13,7 @@ pub struct InterShell{
     input_list : String,
     output_list : Vec<ColorChar>,
 }
+
 impl InterShell {
     pub fn new()->Self{
         println!("inter shell new");
@@ -150,7 +151,7 @@ impl InterShell {
         }
     }
 }
-/// ## Shell
+/// ## 调试用命令交互壳
 /// file tree 一个 Shell 对应一个文件树，默认无目录，需要通过 cddisk 进入某一个磁盘的根目录
 /// list 保存当前 Shell 获取的输入
 pub struct Shell{
@@ -212,7 +213,7 @@ impl Shell {
                                     println!("before set texture");
                                     style.set_texture(img);
                                     println!("before resize");
-                                    style.resize(WIDTH as u32, HEIGHT as u32);
+                                    style.resize(WIDTH, HEIGHT);
                                     style.draw();
                                 }
                                 else {

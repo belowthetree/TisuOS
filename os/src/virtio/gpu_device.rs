@@ -1,8 +1,9 @@
-#![allow(dead_code)]
-//! GPU
+//! # GPU
 //! GPU 控制接口
+//! 
 //! 2020年12月28日 zg
 
+#![allow(dead_code)]
 #[repr(C)]
 struct ResourceFlush {
 	header : ControllHeader,
@@ -177,6 +178,7 @@ impl GPU {
         self.add_desc(header as u64, size_of::<ControllHeader>() as u32, VIRTIO_DESC_F_WRITE);
         self.add_ring(head_idx);
     }
+    /// 覆盖着色
     pub fn draw_rect_override(&mut self, rect : Rect, color_buffer : *mut Pixel){
         if rect.x1 as usize >= self.width || rect.y1 as usize > self.height{
             return;
@@ -189,13 +191,6 @@ impl GPU {
         let width = (rect.x2 - rect.x1) as usize;
         let line = (min(rect.x2, self.width as u32) - rect.x1) as usize;
         self.mutex.lock();
-        // if self.rect.x1 == self.rect.x2 {
-        //     self.rect = rect;
-        // }
-        // else {
-        //     self.rect.x1 = min(self.rect.x1, rect.x1);
-        //     self.rect.y1 = min(self.rect.y1, rect.y1);
-        // }
         for y in (st..ed).step_by(self.width){
             idx = row * width;
             unsafe {
@@ -204,30 +199,25 @@ impl GPU {
             row += 1;
         }
         self.mutex.unlock();
-        // let rect = Rect {
-        //     x1 : rect.x1,
-        //     y1 : rect.y1,
-        //     x2 : min(rect.x2, self.width as u32),
-        //     y2 : min(rect.y2, self.height as u32),
-        // };
-        // self.transfer(rect, self.display_idx);
-        // self.run();
     }
-    pub fn draw_rect_blend(&mut self, rect : Rect, color_buffer : &Block){
+    /// 透明度着色
+    pub fn draw_rect_blend(&mut self, rect : Rect, color_buffer : *mut Pixel){
         if rect.x1 as usize >= self.width || rect.y1 as usize > self.height{
             return;
         }
         let st = rect.y1 as usize * self.width;
         let ed = min(rect.y2 as usize, self.height) * self.width;
-        let ptr = color_buffer.addr as *const Pixel;
+        let ptr = color_buffer as *const Pixel;
         let mut idx = 0;
+        self.mutex.lock();
+        let t = 1.0 / 255.0;
         for y in (st..ed).step_by(self.width){
             for x in rect.x1..min(rect.x2, self.width as u32){
                 unsafe {
                     let id = x as usize + y;
                     let color1 = *ptr.add(idx);
                     let color2 = *self.frame_buffer.add(id);
-                    let rate =  color1.a as f32 / 255.0;
+                    let rate =  color1.a as f32 * t;
                     let rate2 = 1.0 - rate;
                     let color = Pixel{
                         r : (color1.r as f32 * rate) as u8 + (color2.r as f32 * rate2) as u8,
@@ -240,9 +230,7 @@ impl GPU {
                 }
             }
         }
-        assert!(idx * size_of::<Pixel>() <= color_buffer.size);
-        self.transfer(rect, 1);
-        self.run();
+        self.mutex.unlock();
     }
     // pub fn switch_buffer(&mut self){
     //     // println!("switch buffer");
@@ -387,8 +375,7 @@ pub fn pending(pin : usize) {
 	}
 }
 
-///
-/// 绘图api
+/// ## 绘图api
 /// 
 
 pub fn draw_rect_override(device_idx : usize, rect : Rect, color_buffer : *mut Pixel){
@@ -413,7 +400,7 @@ pub fn draw_rect_override(device_idx : usize, rect : Rect, color_buffer : *mut P
 //     }
 // }
 
-pub fn draw_rect_blend(device_idx : usize, rect : Rect, color_buffer : &Box<Block>){
+pub fn draw_rect_blend(device_idx : usize, rect : Rect, color_buffer : *mut Pixel){
     unsafe {
         if let Some(gpus) = &mut DEVICE{
             let gpu = &mut gpus[device_idx];
@@ -575,7 +562,7 @@ impl ResourceFlush {
 }
 
 impl Pixel{
-    pub fn red()->Self{
+    pub const fn red()->Self{
         Pixel{
             r:255,
             g:0,
@@ -583,7 +570,7 @@ impl Pixel{
             a:255,
         }
     }
-    pub fn green()->Self{
+    pub const fn green()->Self{
         Self{
             r:0,
             g:255,
@@ -591,7 +578,7 @@ impl Pixel{
             a:255
         }
     }
-    pub fn blue()->Self{
+    pub const fn blue()->Self{
         Self{
             r:0,
             g:0,
@@ -599,7 +586,7 @@ impl Pixel{
             a:255
         }
     }
-    pub fn yellow()->Self{
+    pub const fn yellow()->Self{
         Self{
             r:255,
             g:255,
@@ -607,7 +594,7 @@ impl Pixel{
             a:255
         }
     }
-    pub fn grey()->Self{
+    pub const fn grey()->Self{
         Self{
             r:55,
             g:55,
@@ -615,7 +602,7 @@ impl Pixel{
             a:255,
         }
     }
-    pub fn white()->Self{
+    pub const fn white()->Self{
         Self{
             r:255,
             g:255,
@@ -623,12 +610,20 @@ impl Pixel{
             a:255
         }
     }
-    pub fn black()->Self{
+    pub const fn black()->Self{
         Self{
             r : 0,
             g : 0,
             b : 0,
             a : 255,
+        }
+    }
+    pub const fn shallow_grey()->Self{
+        Self{
+            r:122,
+            g:122,
+            b:122,
+            a:255,
         }
     }
 }
@@ -696,7 +691,7 @@ pub enum ControllType {
 	RespErrInvalidParameter,
 }
 
-use crate::{memory::{block::Block, global_allocator::{alloc, free}, page::{PAGE_SIZE, alloc_kernel_page}}, sync::Mutex, uart};
+use crate::{memory::{global_allocator::{alloc, free}, page::{PAGE_SIZE, alloc_kernel_page}}, sync::Mutex, uart};
 use core::{cmp::min, mem::size_of};
 use alloc::{prelude::v1::*};
 use device::{Descriptor, VIRTIO_DESC_F_NEXT, VIRTIO_DESC_F_WRITE};

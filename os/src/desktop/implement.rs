@@ -1,51 +1,59 @@
-//! # desktop 文件函数实现
+//! # desktop 功能实现
+//! 
 //! 2020年12月30日 zg
 
 #![allow(dead_code)]
-/// ## Desktop
-/// 
+/// ## 桌面系统
+/// 统一管理所有窗口、Dock
 
-const TERMINAL_WIDTH : u32 = 300;
-const TERMINAL_HEIGHT : u32 = 300;
+const WINDOW_WIDTH : usize = 300;
+const WINDOW_HEIGHT : usize = 300;
 
 impl Desktop {
+    /// ### 新建桌面并向全局注册
+    /// 未来考虑多桌面
     pub fn new(){
         let mut back = Style::new_default();
-        let mut file = open(&"0/mac.bmp".to_string()).unwrap();
+        let mut file = open(&"0/img/mac.bmp".to_string()).unwrap();
         if file.open(OpenFlag::Read.val()).is_ok(){
             let image = generate_image(file).unwrap();
             back.set_texture(image);
         }
-        back.resize(WIDTH as u32, HEIGHT as u32);
+        back.resize(WIDTH as usize, HEIGHT as usize);
         let mut rt = Self{
             valid : false,
             mouse : Mouse::new(),
             background : back,
             dock : Dock::new(),
-            terminal : Vec::<Terminal>::new(),
             window : Vec::<Window>::new(),
             cnt : 0,
         };
         rt.draw();
         register_desktop(rt);
     }
+    /// ### 处理输入、窗口销毁
+    /// 此函数在 desktop.rs 的 run 函数中调用
+    /// 检查每个窗口是否合法
     pub fn run(&mut self){
         self.get_input();
-        if !self.valid {
-            self.remove_window();
-        }
+        // if !self.valid {
+        //     // self.draw();
+        //     // self.valid = true;
+        // }
+        self.refresh_window();
+        self.refresh_dock()
     }
+    /// ### 绘制所有桌面元素
+    /// 没有进程同步（主要是 valid 变量），目前觉得影响不大
     pub fn draw(&mut self){
         if !self.valid{
             self.background.draw();
-            for term in self.terminal.iter(){
-                term.draw();
-            }
             for window in self.window.iter(){
                 window.draw();
             }
-            invalid();
+            self.dock.draw();
             self.valid = true;
+            invalid();
         }
     }
     pub fn setup_background(&mut self, path : &String){
@@ -53,12 +61,95 @@ impl Desktop {
         let image = generate_image(file).unwrap();
         self.background.set_texture(image);
     }
-    pub fn create_terminal(&mut self, x : u32, y : u32){
-        self.valid = false;
-        let terminal = Terminal::new(x, y, TERMINAL_WIDTH, TERMINAL_HEIGHT);
-        self.terminal.push(terminal);
+    /// ### 指定屏幕坐标创建命令行窗口
+    pub fn create_terminal(&mut self, x : usize, y : usize){
+        let window = Window::new(x, y, WINDOW_WIDTH, WINDOW_HEIGHT, WindowType::Text);
+        self.window.push(window);
     }
-    pub fn get_input(&mut self){
+    /// ### 指定屏幕坐标窗口文件窗口
+    pub fn create_file_window(&mut self, x : usize, y : usize){
+        let window = Window::new(x, y, WINDOW_WIDTH, WINDOW_HEIGHT, WindowType::File);
+        self.window.push(window);
+    }
+    /// ### 选择这个点碰到的最表层的窗口
+    pub fn select_window(&mut self, point : Point)->Option<usize>{
+        let point = Position::from_point(point);
+        if self.window.len() > 0 {
+            for (idx, window) in self.window.iter_mut().rev().enumerate(){
+                if window.hidden {
+                    continue;
+                }
+                if window.detect(point) {
+                    let len = self.window.len();
+                    self.window.swap(len - 1, len - idx - 1);
+                    return Some(len - 1);
+                }
+            }
+            None
+        }
+        else {
+            None
+        }
+    }
+    pub fn refresh_window(&mut self){
+        self.remove_window();
+        for window in self.window.iter_mut() {
+            window.refresh();
+        }
+    }
+    pub fn refresh_dock(&mut self){
+        loop {
+            if let Some(ftype) = self.dock.pop_func() {
+                match ftype {
+                    FuncType::OpenTerminal => {
+                        self.create_terminal((WIDTH - WINDOW_WIDTH) / 2, (HEIGHT - WINDOW_HEIGHT) / 2);
+                        self.dock.add_window(self.window.last().unwrap().id, FuncType::TerminalWindow);
+                        self.valid = false;
+                    }
+                    FuncType::OpenFolder => {
+                        self.create_file_window((WIDTH - WINDOW_WIDTH) / 2, (HEIGHT - WINDOW_HEIGHT) / 2);
+                        self.dock.add_window(self.window.last().unwrap().id, FuncType::TerminalWindow);
+                        self.valid = false;
+                    }
+                    _ => {}
+                }
+            }
+            else {
+                break;
+            }
+        }
+        loop {
+            if let Some(id) = self.dock.pop_trigger() {
+                self.trigger_window(id);
+                self.valid = false;
+            }
+            else {
+                break;
+            }
+        }
+    }
+    fn trigger_window(&mut self, id : usize) {
+        for window in self.window.iter_mut() {
+            if window.id == id {
+                window.trigger_hidden();
+                break;
+            }
+        }
+    }
+    /// ### 销毁已关闭窗口
+    fn remove_window(&mut self){
+        for (idx, t) in self.window.iter().enumerate() {
+            if t.is_close() {
+                self.dock.delete_window(t.id);
+                self.window.remove(idx);
+                self.valid = false;
+                break;
+            }
+        }
+    }
+    /// ### 处理输入，转换成命令事件
+    /// 按顺序获取按下、松开，鼠标位置信息，鼠标变量会在内部生成事件，接着处理鼠标事件
+    fn get_input(&mut self){
         loop {
             let input = get_key_press();
             if input != 0{
@@ -70,7 +161,7 @@ impl Desktop {
                         self.valid = false;
                     }
                     _ => {
-                        if let Some(term) = self.terminal.last_mut() {
+                        if let Some(term) = self.window.last_mut() {
                             term.input(key.to_char());
                             self.valid = false;
                         }
@@ -99,6 +190,15 @@ impl Desktop {
                 break;
             }
         }
+        loop {
+            let input = get_scroll();
+            if input != 0{
+                self.mouse.scroll(input);
+            }
+            else{
+                break;
+            }
+        }
         self.mouse.update_position();
         loop{
             let e = self.mouse.get_event();
@@ -109,129 +209,303 @@ impl Desktop {
             self.cmd(e);
         }
     }
-    pub fn cmd(&mut self, event : MouseEvent){
+    /// ### 处理鼠标事件
+    fn cmd(&mut self, event : MouseEvent){
         match event {
             MouseEvent::RightClick => {
                 let p = self.mouse.cur_pos.clone();
-                self.create_terminal((p.x * WIDTH as f32) as u32, (p.y * HEIGHT as f32) as u32);
+                self.create_terminal((p.x * WIDTH as f32) as usize, (p.y * HEIGHT as f32) as usize);
+                self.valid = false;
             }
             MouseEvent::LeftClick => {
-                if let Some(_) = self.select_window(self.mouse.pre_pos){
+                let pos = self.mouse.pre_pos.clone();
+                if let Some(_) = self.select_window(pos){
                     self.valid = false;
                 }
+                self.dock.detect(Position::from_point(pos));
             }
             MouseEvent::Drag => {
                 let dir = self.mouse.get_move_dir();
                 if let Some(idx) = self.select_window(self.mouse.pre_pos){
-                    let term = self.terminal.get_mut(idx).unwrap();
+                    let term = self.window.get_mut(idx).unwrap();
                     term.translate(dir.0, dir.1);
+                    self.valid = false;
+                }
+            }
+            MouseEvent::ScrollDown => {
+                if let Some(term) = self.window.last_mut(){
+                    term.scroll_down();
+                    self.valid = false;
+                }
+            }
+            MouseEvent::ScrollUp => {
+                if let Some(term) = self.window.last_mut(){
+                    term.scroll_up();
                     self.valid = false;
                 }
             }
             _ => {}
         }
     }
-    pub fn select_window(&mut self, point : Point)->Option<usize>{
-        let point = Position::from_point(point);
-        if self.terminal.len() > 0 {
-            for (idx, term) in self.terminal.iter_mut().rev().enumerate(){
-                if term.detect(point) {
-                    let len = self.terminal.len();
-                    self.terminal.swap(len - 1, len - idx - 1);
-                    return Some(len - 1);
-                }
+    
+}
+
+/// ## Dock
+
+const DOCK_HEIGHT : usize = 60;
+const DOCK_WIDTH : usize = 300;
+const DOCK_ITEM_PADDING : usize = 5;
+
+impl Dock {
+    pub fn new()->Self{
+        let x = (WIDTH - DOCK_WIDTH) / 2;
+        let y = HEIGHT - DOCK_HEIGHT;
+        let h = DOCK_HEIGHT / 2;
+        let mut style = Style::new(ColorStyle::SolidColor, x, y + h, DOCK_WIDTH, h);
+        style.set_color(Pixel{r:255, g:255, b:255, a:55});
+        let mut rt = Self{
+            button : Vec::<Button>::new(),
+            function : Vec::<DockFunc>::new(),
+            background : style,
+            x : x,
+            y : y,
+            width : DOCK_WIDTH,
+            height : DOCK_HEIGHT,
+        };
+        rt.add_func(FuncType::OpenFolder);
+        rt.add_func(FuncType::OpenTerminal);
+        rt
+    }
+    pub fn draw(&self){
+        self.background.draw_blend();
+        for btn in self.button.iter() {
+            btn.draw_blend();
+        }
+    }
+    pub fn pop_func(&mut self)->Option<FuncType>{
+        for func in self.function.iter_mut() {
+            if (func.ftype == FuncType::OpenFolder || func.ftype == FuncType::OpenTerminal)
+                && func.trigger {
+                func.trigger = false;
+                return Some(func.ftype);
             }
-            None
+        }
+        None
+    }
+    pub fn pop_trigger(&mut self)->Option<usize>{
+        for func in self.function.iter_mut() {
+            if (func.ftype == FuncType::FolderWindow || func.ftype == FuncType::TerminalWindow)
+                && func.trigger {
+                func.trigger = false;
+                return Some(func.id);
+            }
+        }
+        None
+    }
+    pub fn add_window(&mut self, id : usize, wtype : FuncType){
+        let len = self.function.len();
+        let mut x = WIDTH / 2 - ((len + 1) * DOCK_HEIGHT + len * DOCK_ITEM_PADDING) / 2;
+        let mut btn = Button::new(x, self.y - DOCK_ITEM_PADDING, DOCK_HEIGHT, DOCK_HEIGHT);
+        let step = DOCK_HEIGHT + DOCK_ITEM_PADDING;
+        if let Some(img) = self.get_image(wtype){
+            btn.set_texture(img);
         }
         else {
-            None
+            btn.set_color(Pixel::blue());
+        }
+        self.button.push(btn);
+        self.function.push(DockFunc::new(wtype, id));
+        for btn in self.button.iter_mut(){
+            btn.set_position(x, self.y);
+            x += step;
         }
     }
-    pub fn get_mouse_point(&self)->Point{
-        self.mouse.cur_pos
-    }
-    pub fn remove_window(&mut self){
-        for (idx, t) in self.terminal.iter().enumerate() {
-            if t.is_close() {
-                println!("get close");
-                self.terminal.remove(idx);
-                self.valid = false;
+    pub fn delete_window(&mut self, id : usize) {
+        for (i, func) in self.function.iter_mut().enumerate() {
+            if func.id == id {
+                self.function.remove(i);
+                self.button.remove(i);
+                self.refresh();
                 break;
             }
         }
     }
+    fn add_func(&mut self, ftype : FuncType){
+        let len = self.function.len();
+        let mut x = WIDTH / 2 - ((len + 1) * DOCK_HEIGHT + len * DOCK_ITEM_PADDING) / 2;
+        let mut btn = Button::new(x, self.y - DOCK_ITEM_PADDING, DOCK_HEIGHT, DOCK_HEIGHT);
+        let step = DOCK_HEIGHT + DOCK_ITEM_PADDING;
+        if let Some(img) = self.get_image(ftype){
+            btn.set_texture(img);
+        }
+        else {
+            btn.set_color(Pixel::blue());
+        }
+        self.button.push(btn);
+        self.function.push(DockFunc::new(ftype, 0));
+        for btn in self.button.iter_mut(){
+            btn.set_position(x, self.y);
+            x += step;
+        }
+    }
+    fn get_image(&self, ftype : FuncType)->Option<Image>{
+        let path;
+        if ftype == FuncType::OpenTerminal || ftype == FuncType::TerminalWindow {
+            path = "0/img/terminal_color.bmp".to_string();
+        }
+        else if ftype == FuncType::OpenFolder || ftype == FuncType::FolderWindow {
+            path = "0/img/folder.bmp".to_string();
+        }
+        else {
+            return None;
+        }
+        if let Some(mut file) = open(&path) {
+            if file.open(OpenFlag::Read.val()).is_ok(){
+                return generate_image(file);
+            }
+        }
+        None
+    }
 }
 
-/// ## Dock
-/// 
+impl Transform for Dock {
+    fn set_position(&mut self, x : usize, y : usize) {
+        self.x = x;
+        self.y = y;
+        self.background.set_position(x, y);
+        for btn in self.button.iter_mut() {
+            btn.set_position(x, y);
+        }
+    }
 
-impl Dock{
-    pub fn new()->Self{
-        Self{
+    fn translate(&mut self, x : isize, y : isize) {
+        let mut xx = self.x as isize + x;
+        let mut yy = self.y as isize + y;
+        if xx < 0{
+            xx = 0;
+        }
+        if yy < 0{
+            yy = 0;
+        }
+        self.x = xx as usize;
+        self.y = yy as usize;
+        for btn in self.button.iter_mut(){
+            btn.translate(x, y);
+        }
+        self.background.translate(x, y);
+    }
+
+    fn maximum(&mut self) {
+    }
+
+    fn minimum(&mut self) {
+    }
+
+    fn detect(&mut self, point : Position)->bool {
+        let x = point.x;
+        let y = point.y;
+        let rt = self.x <= x && self.y <= y && self.x + self.width >= x && self.y + self.height >= y;
+        if rt {
+            for (idx, btn) in self.button.iter_mut().enumerate() {
+                if btn.detect(point) {
+                    btn.click = false;
+                    let func = self.function.get_mut(idx).unwrap();
+                    func.trigger = true;
+                }
+            }
+        }
+        rt
+    }
+
+    fn refresh(&mut self){
+        self.button.clear();
+        let funcs = self.function.clone();
+        self.function.clear();
+        for func in funcs.iter() {
+            self.add_func(func.ftype);
         }
     }
 }
 
-/// ## Window
-/// 
+/// ## 窗口
+/// 窗口同时承载文件显示和命令行的功能
+
+static mut WINDOW_ID : usize = 1;
 
 impl Window {
-    pub fn new()->Self{
-        Self{
-
-        }
-    }
-    pub fn draw(&self){
-
-    }
-}
-
-///
-/// Terminal
-///
-
-static mut TERMINAL_ID : usize = 0;
-
-impl Terminal {
-    pub fn new(x : u32, y : u32, width : u32, height : u32)->Self{
+    pub fn new(x : usize, y : usize, width : usize, height : usize, ctype : WindowType)->Self{
         let id;
         unsafe {
-            id = TERMINAL_ID;
-            TERMINAL_ID += 1;
+            id = WINDOW_ID;
+            WINDOW_ID += 1;
+        }
+        let mut shell = InterShell::new();
+        shell.filetree = get_root(0);
+        let mut content = WindowContent::new(x, y + HEADBAR_HEIGHT, width, height - HEADBAR_HEIGHT, ctype);
+        if ctype == WindowType::File {
+            if let Some(s) = &shell.filetree{
+                content.refresh_content(s);
+            }
         }
         let rt = Self{
             x : x,
             y : y,
             width : width,
             height : height,
-            depth : 0,
+            hidden : false,
             head_bar : HeadBar::new(x, y, width, HEADBAR_HEIGHT),
-            text : TextContent::new(x, y + HEADBAR_HEIGHT, width, height - HEADBAR_HEIGHT),
-            shell : InterShell::new(),
+            content : content,
+            shell : shell,
             id : id,
         };
         rt
     }
     pub fn draw(&self){
+        if self.hidden {
+            return;
+        }
         self.head_bar.draw();
-        self.text.draw();
+        self.content.draw();
     }
+    /// ### 判断是否已经关闭
+    /// 窗口的关闭依赖于关闭按钮的状态
     pub fn is_close(&self)->bool{
         self.head_bar.close_button.click
     }
+    /// ### 传递输入给窗口的 Shell
+    /// 非命令行不接受输入，边接受边显示
+    /// 同时获取 Shell 处理得到的结果输出
     pub fn input(&mut self, c : char){
+        if self.content.ctype != WindowType::Text{
+            return;
+        }
         self.shell.input(c);
-        self.text.putchar(c);
+        self.content.putchar(c);
         for c in self.shell.pop_output(){
-            self.text.putchar_color(c.c, c.color);
+            self.content.putchar_color(c.c, c.color);
         }
     }
+    /// ### 处理滚轮事件
+    pub fn scroll_down(&mut self){
+        self.content.canvas.scroll(-16);
+    }
+    pub fn scroll_up(&mut self){
+        self.content.canvas.scroll(16);
+    }
+    pub fn is_hidden(&self)->bool {
+        self.head_bar.is_hidden()
+    }
+    pub fn trigger_hidden(&mut self) {
+        self.head_bar.trigger_hidden();
+        self.hidden = self.is_hidden();
+    }
+
 }
 
-impl Transform for Terminal {
-    fn set_position(&mut self, x : u32, y : u32) {
+impl Transform for Window {
+    fn set_position(&mut self, x : usize, y : usize) {
         self.head_bar.set_position(x, y);
-        self.text.set_position(x, y);
+        self.content.set_position(x, y);
     }
 
     fn maximum(&mut self) {
@@ -250,106 +524,153 @@ impl Transform for Terminal {
         rt
     }
 
-    fn translate(&mut self, x : i32, y : i32) {
+    fn translate(&mut self, x : isize, y : isize) {
         let mut x = x;
         let mut y = y;
-        let mut xx = self.x as i32 + x;
-        let mut yy = self.y as i32 + y;
+        let mut xx = self.x as isize + x;
+        let mut yy = self.y as isize + y;
         if xx < 0{
             xx = 0;
-            x = - (self.x as i32);
+            x = - (self.x as isize);
         }
         if yy < 0{
             yy = 0;
-            y = - (self.y as i32);
+            y = - (self.y as isize);
         }
-        self.x = xx as u32;
-        self.y = yy as u32;
+        self.x = xx as usize;
+        self.y = yy as usize;
         self.head_bar.translate(x, y);
-        self.text.translate(x, y);
+        self.content.translate(x, y);
+    }
+
+    fn refresh(&mut self) {
+        self.hidden = self.is_hidden();
     }
 }
 
-/// ## TextContent
+/// ## 窗口内容区域
+/// 命令行与文件窗口的区别体现在此
 
-impl TextContent {
-    pub fn new(x : u32, y : u32, width : u32, height : u32)->Self{
-        let color = ColorStyle::SolidColor;
-        let mut content = Style::new(color, x, y, width, height);
-        content.set_color(Pixel::black());
+const FILE_RECT_SIZE : usize = 80;
+pub const FONT_HEIGHT : usize = 16;
+pub const FONT_WIDTH : usize = 8;
+const FILE_PADDING : usize = 20;
+const FILE_RECT_COLOR : Pixel = Pixel::grey();
+const FILE_BACKGROUND : Pixel = Pixel::white();
+
+impl WindowContent {
+    pub fn new(x : usize, y : usize, width : usize, height : usize, ctype : WindowType)->Self{
+        let mut canvas = Canvas::new(x, y, width, height);
+        if ctype == WindowType::Text{
+            canvas.fill(Pixel::black());
+        }
+        else {
+            println!("window set color");
+            canvas.fill(Pixel::white());
+        }
         let mut rt = Self{
+            ctype : ctype,
             width : width,
             height : height,
-            content : content,
+            canvas : canvas,
             write_x : 0,
             write_y : 0,
         };
-        rt.putchar_color('=', Pixel::green());
-        rt.putchar_color(':', Pixel::green());
+        if ctype == WindowType::Text{
+            rt.putchar_color('=', Pixel::green());
+            rt.putchar_color(':', Pixel::green());
+        }
         rt
     }
     pub fn draw(&self){
-        self.content.draw();
+        self.canvas.draw();
     }
+    /// ## 命令行功能
+    /// ### 默认颜色输出 ASCII 字符
     pub fn putchar(&mut self, c : char){
-        if c == '\n' || c == '\r' {
-            self.write_y += 16;
-            self.write_x = 0;
-            self.new_line();
-            self.putchar_color('=', Pixel::green());
-            self.putchar_color(':', Pixel::green());
-            return;
-        }
-        if self.write_y >= self.height as usize - 16 {
-            self.new_line();
-        }
-        self.content.element.fill_font(c as usize, self.write_x, self.write_y,
-            Pixel::white(), Pixel::black());
-        self.write_x += 8;
-        self.write_y += ((self.write_x + 8) / self.width as usize) * 16;
-        if self.write_x + 8 > self.width as usize{
-            self.write_x = 0;
-        }
+        self.putchar_color(c, Pixel::white());
     }
+    /// ### 指定颜色输出 ASCII 字符
     pub fn putchar_color(&mut self, c : char, color : Pixel){
         if c == '\n' || c == '\r' {
-            self.write_y += 16;
             self.write_x = 0;
-            self.new_line();
+            self.write_y += FONT_HEIGHT;
             self.putchar_color('=', Pixel::green());
             self.putchar_color(':', Pixel::green());
             return;
         }
-        if self.write_y >= self.height as usize - 16 {
-            self.new_line();
-        }
-        self.content.element.fill_font(c as usize, self.write_x, self.write_y,
+        self.canvas.fill_font(c as usize, self.write_x, self.write_y,
             color, Pixel::black());
         self.write_x += 8;
-        self.write_y += ((self.write_x + 8) / self.width as usize) * 16;
+        self.write_y += ((self.write_x + 8) / self.width as usize) * FONT_HEIGHT;
         if self.write_x + 8 > self.width as usize{
             self.write_x = 0;
         }
     }
-    pub fn new_line(&mut self){
-        if self.write_y >= self.height as usize - 16 {
-            self.write_y -= 16;
-            unsafe {
-                let ptr = self.content.element.content.addr as *mut Pixel;
-                ptr.copy_from(ptr.add(self.width as usize * 16),
-                (self.width * self.height) as usize);
-                let ptr = ptr.add((self.width * self.height) as usize);
-                for i in 0..self.width as usize{
-                    ptr.add(i).write(Pixel::black());
-                }
+    /// ## 文件窗口功能
+    /// ### 刷新文件显示
+    pub fn refresh_content(&mut self, tree : &FileTree){
+        assert!(self.ctype == WindowType::File);
+        self.write_x = 0;
+        self.write_y = 0;
+        self.canvas.fill(FILE_BACKGROUND);
+        for item in tree.items.iter(){
+            self.add(item);
+        }
+    }
+    /// ### 增加一个文件显示单元
+    fn add(&mut self, item : &TreeItem){
+        if self.write_x + FILE_RECT_SIZE >= self.width as usize {
+            self.write_y += FILE_RECT_SIZE;
+            self.write_x = 0;
+        }
+        let rect = Rect {
+            x1 : (self.write_x + FILE_PADDING) as u32,
+            y1 : (self.write_y + FILE_PADDING) as u32,
+            x2 : (self.write_x + FILE_RECT_SIZE - FILE_PADDING) as u32,
+            y2 : (self.write_y + FILE_RECT_SIZE - FILE_PADDING) as u32,
+        };
+        let s;
+        if item.is_file() {
+            s = &"0/img/file_black.bmp";
+        }
+        else{
+            s = &"0/img/folder_black.bmp";
+        }
+        if let Some(mut file) = open(&s.to_string()){
+            file.open(OpenFlag::Read.val()).ok();
+            if let Some(img) = generate_image(file){
+                self.canvas.fill_image(rect, img);
+            }
+            else {
+                self.canvas.fill_rect(rect, FILE_RECT_COLOR);
             }
         }
+        else {
+            self.canvas.fill_rect(rect, FILE_RECT_COLOR);
+        }
+        let mut x;
+        if FILE_RECT_SIZE > FONT_WIDTH * item.filename.len() {
+            x = self.write_x + (FILE_RECT_SIZE - FONT_WIDTH * item.filename.len()) / 2;
+        }
+        else {
+            x = self.write_x;
+        }
+        let y = self.write_y + FILE_RECT_SIZE - FILE_PADDING;
+        for c in item.filename.bytes() {
+            self.canvas.fill_font(c as usize, x, y, Pixel::black(), Pixel::white());
+            if x >= self.write_x + FILE_RECT_SIZE as usize {
+                break;
+            }
+            x += FONT_WIDTH;
+        }
+        self.write_x += FILE_RECT_SIZE;
     }
 }
 
-impl Transform for TextContent {
-    fn set_position(&mut self, x : u32, y : u32) {
-        self.content.set_position(x, y);
+impl Transform for WindowContent {
+    fn set_position(&mut self, x : usize, y : usize) {
+        self.canvas.element.set_position(x, y);
     }
 
     fn maximum(&mut self) {
@@ -359,28 +680,33 @@ impl Transform for TextContent {
     }
 
     fn detect(&mut self, point : Position)->bool {
-        self.content.detect(point)
+        self.canvas.detect(point)
     }
 
-    fn translate(&mut self, x : i32, y : i32) {
-        self.content.translate(x, y);
+    fn translate(&mut self, x : isize, y : isize) {
+        self.canvas.translate(x, y);
+    }
+
+    fn refresh(&mut self) {
     }
 }
 
-///
-/// Headbar
+/// ## 标题栏
 
-const HEADBAR_HEIGHT : u32 = 20;
+const HEADBAR_HEIGHT : usize = 20;
 
 impl HeadBar {
-    pub fn new(x : u32, y : u32, width : u32, height : u32)->Self{
-        let btn = Button::new(x + width - BUTTON_WIDTH, y, BUTTON_WIDTH, height);
+    pub fn new(x : usize, y : usize, width : usize, height : usize)->Self{
+        let close_btn = Button::new(x + width - BUTTON_WIDTH, y, BUTTON_WIDTH, height);
+        let mut small_btn = Button::new(x + width - BUTTON_WIDTH * 2, y, BUTTON_WIDTH, height);
+        small_btn.set_color(Pixel::shallow_grey());
         let mut back = Style::new(ColorStyle::SolidColor, x, y, width, height);
-        back.set_color(Pixel::white());
+        back.set_color(Pixel::grey());
         
         Self{
             background : back,
-            close_button : btn,
+            close_button : close_btn,
+            small_button : small_btn,
             x : x,
             y : y,
             width : width,
@@ -389,34 +715,26 @@ impl HeadBar {
             close_button_offset : 470,
         }
     }
-    pub fn new_default()->Self{
-        let mut btn = Button::new_default();
-        btn.set_position(470, 0);
-        let mut back = Style::new(ColorStyle::SolidColor, 0, 0, 500, HEADBAR_HEIGHT);
-        back.set_color(Pixel::white());
-        Self{
-            background : back,
-            close_button : btn,
-            x : 0,
-            y : 0,
-            width : 500,
-            height : 20,
-            button_width : 30,
-            close_button_offset : 470,
-        }
-    }
     pub fn draw(&self){
         self.background.draw();
         self.close_button.draw();
+        self.small_button.draw();
+    }
+    pub fn is_hidden(&self)->bool {
+        self.small_button.click
+    }
+    pub fn trigger_hidden(&mut self){
+        self.small_button.click = !self.small_button.click;
     }
 }
 
 impl Transform for HeadBar {
-    fn set_position(&mut self, x : u32, y : u32) {
+    fn set_position(&mut self, x : usize, y : usize) {
         self.x = x;
         self.y = y;
         self.background.set_position(x, y);
-        self.close_button.set_position(x, y);
+        self.close_button.set_position(x + self.width - BUTTON_WIDTH, y);
+        self.small_button.set_position(x + self.width - BUTTON_WIDTH * 2, y);
     }
 
     fn maximum(&mut self) {
@@ -431,31 +749,32 @@ impl Transform for HeadBar {
         let rt = self.x <= x && self.y <= y && self.x + self.width >= x && self.y + self.height >= y;
         if rt {
             self.close_button.detect(point);
+            self.small_button.detect(point);
         }
         rt
     }
 
-    fn translate(&mut self, x : i32, y : i32) {
-        let mut xx = self.x as i32 + x;
-        let mut yy = self.y as i32 + y;
+    fn translate(&mut self, x : isize, y : isize) {
+        let mut xx = self.x as isize + x;
+        let mut yy = self.y as isize + y;
         if xx < 0{
             xx = 0;
         }
         if yy < 0{
             yy = 0;
         }
-        self.x = xx as u32;
-        self.y = yy as u32;
+        self.x = xx as usize;
+        self.y = yy as usize;
         self.background.translate(x, y);
         self.close_button.translate(x, y);
+        self.small_button.translate(x, y);
+    }
+
+    fn refresh(&mut self) {
     }
 }
 
-use crate::{filesystem::{file::OpenFlag, image::bmp::generate_image, interface::open}, graphic::element::Draw, interact::shell::{InterShell}, virtio::{gpu_device::{HEIGHT, Pixel,
-    WIDTH, invalid}, input::{input_buffer::{Point, get_key_press, get_key_release},
-    keyboard::Key}}};
+use crate::{filesystem::{file::OpenFlag, file_tree::{FileTree, TreeItem}, image::{bmp::generate_image, image::Image}, interface::open, operation::get_root}, graphic::{canvas::Canvas, element::Draw, transform::ElemTranform}, interact::shell::{InterShell}, virtio::{gpu_device::{HEIGHT, Pixel, Rect, WIDTH, invalid}, input::{input_buffer::{Point, get_key_press, get_key_release, get_scroll}, keyboard::Key}}};
 use crate::uart;
-use super::{controll::{button::{BUTTON_WIDTH, Button}, style::style::{ColorStyle, Style}},
-    desktop::{Desktop, Dock, HeadBar, Position, Terminal, TextContent, Window, register_desktop},
-    desktop_trait::{Transform}, mouse::{Mouse, MouseEvent}};
+use super::{controll::{button::{BUTTON_WIDTH, Button}, style::style::{ColorStyle, Style}}, desktop::{Desktop, Dock, DockFunc, FuncType, HeadBar, Position, Window, WindowContent, WindowType, register_desktop}, desktop_trait::{Transform}, mouse::{Mouse, MouseEvent}};
 use alloc::{prelude::v1::*};

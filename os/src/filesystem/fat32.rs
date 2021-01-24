@@ -96,7 +96,7 @@ impl FATManger {
     // 获取 fat 表项
     pub fn get_fat_item(&mut self, cluster : usize) ->Option<FATItem> {
         let addr = self.fat_addr as usize + cluster * size_of::<FATItem>();
-        let b = new_block(size_of::<FATItem>());
+        let b = Block::new(size_of::<FATItem>());
         // if unsafe {DEBUG} {
         //     println!("before read fat");
         // }
@@ -171,7 +171,7 @@ impl FATManger {
         }
     }
     pub fn set_fat_item(&mut self, cluster : usize, val : u32){
-        let b = new_block(4);
+        let b = Block::new(4);
         unsafe {
             (b.addr as *mut u32).write_volatile(val);
         }
@@ -213,7 +213,7 @@ impl FATManger {
         }
         let cluster = clusters[i];
         let addr = st + (cluster - 2) * self.cluster_size + idx * size_of::<FATLongDirItem>();
-        let buffer = new_block(size_of::<FATLongDirItem>());
+        let buffer = Block::new(size_of::<FATLongDirItem>());
         unsafe {
             (buffer.addr as *mut FATLongDirItem).write_volatile(item);
         }
@@ -229,7 +229,7 @@ impl FATManger {
         }
         let cluster = clusters[i];
         let addr = st + (cluster - 2) * self.cluster_size + idx * size_of::<FATShortDirItem>();
-        let buffer = new_block(size_of::<FATShortDirItem>());
+        let buffer = Block::new(size_of::<FATShortDirItem>());
         unsafe {
             (buffer.addr as *mut FATShortDirItem).write_volatile(item);
         }
@@ -245,7 +245,7 @@ impl FATManger {
         }
         let cluster = clusters[i];
         let addr = st + (cluster - 2) * self.cluster_size;
-        let buffer = new_block(self.cluster_size);
+        let buffer = Block::new(self.cluster_size);
         sync_read_buffer(self.block_idx, buffer.addr, self.cluster_size as u32, addr);
         unsafe {
             let item = (buffer.addr as *mut FATShortDirItem).add(idx);
@@ -263,7 +263,7 @@ impl FATManger {
     pub fn delete_sequence_dir_item(&mut self, cluster : usize, idx : usize, len : usize){
         let st = self.cluster_start_addr;
         let clusters = self.get_all_cluster(cluster).unwrap();
-        let buffer = new_block(size_of::<FATShortDirItem>());
+        let buffer = Block::new(size_of::<FATShortDirItem>());
         for i in 0..len{
             let ii = (idx + i) / (self.cluster_size / size_of::<FATShortDirItem>());
             if ii >= clusters.len(){
@@ -287,7 +287,7 @@ impl FATManger {
         let mut record = 0;
         for cluster in clusters {
             let addr = st + (cluster - 2) * self.cluster_size;
-            let buffer = new_block(self.cluster_size);
+            let buffer = Block::new(self.cluster_size);
             sync_read_buffer(self.block_idx, buffer.addr, self.cluster_size as u32, addr);
             for idx in (0..self.cluster_size).step_by(step){
                 unsafe {
@@ -317,7 +317,7 @@ impl FATManger {
         let step = size_of::<FATShortDirItem>();
         for cluster in clusters {
             let addr = st + (cluster - 2) * self.cluster_size;
-            let buffer = new_block(self.cluster_size);
+            let buffer = Block::new(self.cluster_size);
             sync_read_buffer(self.block_idx, buffer.addr, self.cluster_size as u32, addr);
             for idx in (0..self.cluster_size).step_by(step){
                 unsafe {
@@ -654,6 +654,6 @@ pub struct Extend{
 
 use core::{mem::size_of};
 use crate::{libs::str::{from_u64, split_back, to_u64}, memory, uart, virtio::buffer::{sync_read_buffer, sync_write_buffer}};
-use memory::block::new_block;
+use memory::block::Block;
 
 

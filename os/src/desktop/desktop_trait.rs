@@ -4,13 +4,16 @@
 
 
 use super::desktop::Position;
-
+/// ## 变化要求
 pub trait Transform {
-    fn set_position(&mut self, x : u32, y : u32);
-    fn translate(&mut self, x : i32, y : i32);
+    fn set_position(&mut self, x : usize, y : usize);
+    fn translate(&mut self, x : isize, y : isize);
     fn maximum(&mut self);
     fn minimum(&mut self);
+    /// ## 用于检测桌面元素是否在包含此点
+    /// 按钮的状态应该在此函数内完成判断、转变
     fn detect(&mut self, point : Position)->bool;
+    fn refresh(&mut self);
 }
 
 pub trait Trigger {

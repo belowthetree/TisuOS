@@ -23,7 +23,7 @@ pub struct BMP{
 }
 impl BMP {
     pub fn is_bmp(&self)->bool{
-        println!("{}BM", &from_u16(self.btype)[..]);
+        // println!("{}BM", &from_u16(self.btype)[..]);
         &from_u16(self.btype)[..] == "BM"
     }
 
@@ -31,9 +31,7 @@ impl BMP {
 
 pub fn generate_image(file : File)->Option<Image>{
     let content;
-    println!("before read bmp");
     if let Some(ctx) = file.read(0, file.size){
-        println!("after read bmp");
         content = ctx;
     }
     else{
@@ -43,16 +41,16 @@ pub fn generate_image(file : File)->Option<Image>{
     unsafe {
         let bmp = &*addr;
         if bmp.is_bmp() && !bmp.compression_type.is_compressed(){
-            println!("width {}, height {}, bitcnt {}", bmp.width, bmp.height.abs(), bmp.bitcnt);
             let width = bmp.width as usize;
             let height = bmp.height.abs() as usize;
+            let is_down = bmp.height > 0;
             let mut rt = Image::new(width, height, Format::RGB);
             let mut data_offset = bmp.data_offset as usize;
             let mut idx = 0;
             let ptr = content.addr;
             let skip = (4 - (width * bmp.bitcnt as usize) % 4) % 4;
-            println!("file size {}KB, skip {} per line, size of color {}",
-                file.size / 1024, skip, size_of::<BMPColor>());
+            // println!("file size {}KB, skip {} per line, size of color {}",
+            //     file.size / 1024, skip, size_of::<BMPColor>());
             for _ in 0..height{
                 for _ in 0..width{
                     let color = *(ptr.add(data_offset) as *mut BMPColor);
@@ -61,6 +59,9 @@ pub fn generate_image(file : File)->Option<Image>{
                     data_offset += 4;
                 }
                 data_offset += skip;
+            }
+            if is_down {
+                rt.updown();
             }
             println!("gen img over");
             Some(rt)

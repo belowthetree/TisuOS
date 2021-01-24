@@ -32,8 +32,8 @@ fn update_file_record(file : &File){
     unsafe {
         FILE_LOCK.lock();
         if let Some(files) = &mut OPENED_FILES{
-            for (idx, file) in files.iter().enumerate(){
-                if file.start_cluster == file.start_cluster && file.block_idx == file.block_idx{
+            for (idx, f) in files.iter().enumerate(){
+                if f.start_cluster == file.start_cluster && f.block_idx == file.block_idx{
                     files[idx] = file.clone();
                     FILE_LOCK.unlock();
                     return;
@@ -45,17 +45,17 @@ fn update_file_record(file : &File){
     }
 }
 
-fn open_file(_file : &File, flag : u8)->Result<(), ()>{
+fn open_file(file : &File, flag : u8)->Result<(), ()>{
     unsafe {
         FILE_LOCK.lock();
         if let Some(files) = &mut OPENED_FILES{
-            for file in files{
-                if file.start_cluster == file.start_cluster && file.block_idx == file.block_idx{
-                    if file.is_write() || file.is_read() && flag & OpenFlag::Write.val() != 0{
+            for f in files{
+                if f.start_cluster == file.start_cluster && f.block_idx == file.block_idx{
+                    if f.is_write() || f.is_read() && flag & OpenFlag::Write.val() != 0{
                         FILE_LOCK.unlock();
                         return Err(());
                     }
-                    file.open_cnt += 1;
+                    f.open_cnt += 1;
                     FILE_LOCK.unlock();
                     return Ok(());
                 }
@@ -66,13 +66,13 @@ fn open_file(_file : &File, flag : u8)->Result<(), ()>{
     }
 }
 
-fn close_file(_file : &File){
+fn close_file(file : &File){
     unsafe {
         FILE_LOCK.lock();
         if let Some(files) = &mut OPENED_FILES{
-            for file in files{
-                if file.start_cluster == file.start_cluster && file.block_idx == file.block_idx{
-                    file.open_cnt -= 1;
+            for f in files{
+                if f.start_cluster == file.start_cluster && f.block_idx == file.block_idx{
+                    f.open_cnt -= 1;
                     FILE_LOCK.unlock();
                     return;
                 }
@@ -162,6 +162,11 @@ pub struct File{
     pub flag : u8,
 }
 
+impl Drop for File {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
 impl Clone for File{
     fn clone(&self) -> Self {
         Self{
@@ -213,6 +218,9 @@ impl File {
     /// ## 关闭文件
     /// 文件使用计数减一
     pub fn close(&mut self){
+        if self.is_close(){
+            return;
+        }
         close_file(self);
         self.flag = OpenFlag::Close.val();
     }
@@ -239,6 +247,8 @@ impl File {
     }
     
 }
+
+
 #[repr(u8)]
 pub enum OpenFlag{
     Close = 0,

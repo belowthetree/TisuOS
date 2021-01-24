@@ -15,9 +15,12 @@ static mut KEY_PRESS_CUR_IDX : usize = 0;
 static mut KEY_PRESS_GET_IDX : usize = 0;
 pub static mut KEY_RELEASE_CUR_IDX : usize = 0;
 pub static mut KEY_RELEASE_GET_IDX : usize = 0;
+static mut SCROLL_CUR_IDX : usize = 0;
+static mut SCROLL_GET_IDX : usize = 0;
 static mut MOUSE_POSITION : [Point;QUEUE_SIZE] = [Point::new();QUEUE_SIZE];
 static mut KEY_PRESSED : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE];
 static mut KEY_RELEASE : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE];
+static mut SCROLL : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE]; // 1 是上滑，2 是下滑
 static mut DELEGATE : Option<Vec<fn()>> = None;
 
 pub fn init(){
@@ -103,6 +106,31 @@ pub fn register(f : fn()) {
         if let Some(delegate) = &mut DELEGATE {
             delegate.push(f);
         }
+    }
+}
+
+pub fn add_scroll(v : u16){
+    unsafe {
+        SCROLL[SCROLL_CUR_IDX] = v;
+        SCROLL_CUR_IDX = (SCROLL_CUR_IDX + 1) % QUEUE_SIZE;
+        if let Some(delegate) = &mut DELEGATE {
+            for del in delegate {
+                del();
+            }
+        }
+    }
+}
+
+pub fn get_scroll()->u16{
+    unsafe {
+        let idx = SCROLL_GET_IDX;
+        if SCROLL_GET_IDX != SCROLL_CUR_IDX{
+            SCROLL_GET_IDX = (SCROLL_GET_IDX + 1) % QUEUE_SIZE;
+        }
+        else {
+            return 0;
+        }
+        SCROLL[idx]
     }
 }
 

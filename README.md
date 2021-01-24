@@ -16,15 +16,18 @@ github 地址：https://github.com/belowthetree/TisuOS
 * riscv64-unknown-linux-gnu-gcc
 * rust-nightly
 
-指令：`make all`
-
-注意：GitHub 版本没有硬盘镜像，需要自己创建一个 FAT32 格式的硬盘镜像
+`make all`
 
 ## 运行：
 
 * QEMU-system-riscv64
 
-`qemu-system-riscv64 -machine virt -cpu rv64 -smp 4 -m 128M -drive if=none,format=raw,file=hdd.dsk,id=foo -device virtio-blk-device,scsi=off,drive=foo -nographic -serial mon:stdio -bios none -device virtio-rng-device -device virtio-gpu-device -device virtio-net-device -device virtio-tablet-device -device virtio-keyboard-device -kernel `
+`qemu-system-riscv64 -machine virt -cpu rv64 -smp 4 -m 512M -drive if=none,format=raw,file=hdd.dsk,id=foo -device virtio-blk-device,scsi=off,drive=foo -nographic -serial mon:stdio -bios none -device virtio-rng-device -device virtio-gpu-device -device virtio-net-device -device virtio-tablet-device -device virtio-keyboard-device -kernel `
+
+## 包含
+
+* 基础教程部分，为 osv1.0
+* 扩展部分 tisuos，重构的代码
 
 ## 教程部分
 

@@ -5,3 +5,4 @@ pub mod implement;
 pub mod element;
 pub mod display;
 pub mod mask;
+pub mod canvas;

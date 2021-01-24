@@ -4,7 +4,7 @@
 
 use core::{cmp::min, mem::size_of};
 
-use crate::{libs::str::{check_sum, make_shortname}, memory::block::{Block, new_block}, uart, virtio::buffer::{sync_read_buffer, sync_write_buffer, sync_write_zero}};
+use crate::{libs::str::{check_sum, make_shortname}, memory::block::{Block}, uart, virtio::buffer::{sync_read_buffer, sync_write_buffer, sync_write_zero}};
 
 use super::{fat32::{Attribute, FATItem, FATLongDirItem, FATManger, FATShortDirItem, FLAG_END}, file_tree::{FileTree, TreeItem}, operation::{BlockInfo, Directory, IO}};
 use alloc::{prelude::{v1::*}};
@@ -16,7 +16,7 @@ use alloc::{prelude::{v1::*}};
 
 impl IO for FATManger {
     fn read(&mut self, block_idx : usize, cluster : usize, offset : usize, len : usize)->Option<Block> {
-        let rt = new_block(len);
+        let rt = Block::new(len);
         let mut cluster = cluster;
         let mut size = len;
         let mut item = self.get_fat_item(cluster).unwrap();
@@ -68,7 +68,6 @@ impl IO for FATManger {
 impl Directory for FATManger{
     fn get_file_tree(&mut self, cluster : usize)->Option<super::file_tree::FileTree> {
         if let Some(items) = self.get_dir_items(cluster){
-            println!("after get item");
             let mut files = Vec::<TreeItem>::new();
             let mut filename = String::new();
             let mut len = 0;

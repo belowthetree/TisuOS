@@ -116,8 +116,8 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
             }
             8 | 9 | 11 => {
                 env.regs[Register::A0.val()] = syscall::handler(env);
-                env.epc = pc + 4;
-                thread::schedule(env);
+                // env.epc = pc + 4;
+                // thread::schedule(env);
                 pc += 4;
             },
             12 => {
@@ -183,7 +183,6 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
 }
 
 
-use cpu::write_mscratch;
 use thread::delete_current_thread;
 
 use crate::{memory::page::{KERNEL_STACK_END, KERNEL_STACK_START}, task::{thread}};

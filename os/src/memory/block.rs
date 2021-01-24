@@ -8,6 +8,14 @@ pub struct Block{
     pub size : usize,
 }
 impl Block {
+    pub fn new(size : usize)->Block{
+        let addr = alloc(size, true);
+        assert!(!addr.is_null());
+        Block {
+            addr : addr,
+            size : size,
+        }
+    }
     /// 获取内存中的某个值
     #[allow(dead_code)]
     pub fn get(&self, idx : usize)->Option<u8>{
@@ -32,15 +40,6 @@ impl Block {
             target.copy_from(self.addr, min(len, self.size));
         }
     }
-}
-
-pub fn new_block(size : usize) ->Block {
-    let b = Block{
-        addr : alloc(size, true),
-        size : size,
-    };
-    assert!(!b.addr.is_null());
-    b
 }
 
 impl Drop for Block{

@@ -72,34 +72,22 @@ extern "C" fn kernel_init(){
     trap::init(0);
     page::init();
     global_allocator::init();
-    println!("trap stack end {:x},
-        kernel heap {:x}, kernel stack {:x}",
-        unsafe{page::TRAP_STACK_END}, unsafe {page::KERNEL_HEAP_START}, unsafe {page::KERNEL_STACK_END});
-    println!("finish mem");
     plic::init();
-    println!("before device");
     device::init();
-    println!("finish device");
     
     process::init();
 	buffer::init();
     // test_disk();
     // abort();
     operation::init(); // 文件系统初始化
-    global_allocator::Memory::print();
-    println!("finish filesystem");
     input::init();
 
     gpu_device::reset(0);
-    println!("finish gpu");
 
     shell::init();
     input_buffer::init();
     desktop::desktop::init();
-    timer::set_next_interrupt(1);
     process::start_init_process();
-    // process::create_and_add(shell::update as usize, true);
-
 
     println!("to process");
 }
@@ -220,5 +208,4 @@ use virtio::{block_device::sync_write, buffer, device, gpu_device, input::input_
 use memory::global_allocator;
 use memory::page;
 use interrupt::trap;
-use interrupt::timer;
 use uart::Uart;

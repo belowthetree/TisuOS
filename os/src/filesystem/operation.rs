@@ -108,7 +108,7 @@ fn get_mgr<'a>(block_idx : usize) ->Option<&'a mut FATManger>{
 
 /// ## 获取磁盘的 fat32 信息
 fn get_fat_info(block_idx : usize) ->Block{
-    let block = new_block(512);
+    let block = Block::new(512);
     sync_read_buffer(block_idx, block.addr, 512, 0);
     block
 }
@@ -143,6 +143,6 @@ pub trait BlockInfo {
 use crate::{uart, virtio::buffer::{self, sync_read_buffer}};
 use super::{fat32, file::{File, OPENED_FILES}, file_tree::{FileTree}};
 use crate::virtio::block_device::{BLOCKS};
-use crate::memory::block::{Block, new_block};
+use crate::memory::block::{Block};
 use super::fat32::{FATManger};
 use fat32::{FATInfo};

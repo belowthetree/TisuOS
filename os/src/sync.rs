@@ -4,7 +4,7 @@
 //! 所以只需要实现一个简单的互斥锁就可以完成其它锁
 //! 2020年11月 zg
 
-#[allow(dead_code)]
+#![allow(dead_code)]
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub enum MutexState{

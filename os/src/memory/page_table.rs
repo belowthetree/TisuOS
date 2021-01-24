@@ -254,8 +254,11 @@ pub fn map_kernel_area(pt : &mut PageTable, is_kernel : bool){
                 let addr =0x1000_0000 + i * page::PAGE_SIZE;
                 pt.map_kernel(addr,addr);
             }
-            let addr = 0x200_B000;
-            pt.map_kernel(addr,addr);
+            let addr = 0x200_0000;
+            for i in 0..16 {
+                let addr = addr + i * page::PAGE_SIZE;
+                pt.map_kernel_data(addr,addr);
+            }
         }
         else{
             let st = page::MEMORY_START;
