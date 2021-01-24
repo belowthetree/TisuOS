@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Bounds","Bounds 边缘框，用来检测鼠标的相交信息等"],["Desktop",""],["Dock",""],["HeadBar",""],["Terminal",""],["Window",""]]});

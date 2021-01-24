@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["PageBit","PageBit 页表属性，与 page.rs 中的 PageBit 无关"]],"fn":[["init",""],["make_satp",""],["map_kernel_area","将内核代码部分进行映射 因为进程返回调用了内核中的代码"]],"static":[["MODE",""]],"struct":[["PTE","PTE 页表项的 PPN 给出下一级页表地址或者实际的物理地址 以一个页表为单位，所以给出的地址需要先右移 12 位"],["PageTable","PageTable Rv39 页表，本身占据一个页表（默认4KB）的大小 分为三级，页表地址必须以一个页表的大小对齐"],["SATP","SATP"]]});

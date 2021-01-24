@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["BUFFER_SIZE",""]],"enum":[["Attribute",""]],"struct":[["BPB",""],["Extend",""],["FATInfo","FATInfo 处理 FAT32 格式的磁盘信息"],["FATItem",""],["FATManger","FATManger 初始化获得一个磁盘的 FAT32 信息，提供目录项及文件的读取"],["FATShortDirItem",""]]});

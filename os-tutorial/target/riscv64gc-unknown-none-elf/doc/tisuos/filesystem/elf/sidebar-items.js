@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["MAGIC",""]],"enum":[["Etype",""],["Machine",""],["PType",""]],"fn":[["load_elf","load elf 加载 ELF 文件并创建进程执行，暂时使用"]],"struct":[["ELF",""],["ProgramHeader",""],["SectionHeader",""]]});

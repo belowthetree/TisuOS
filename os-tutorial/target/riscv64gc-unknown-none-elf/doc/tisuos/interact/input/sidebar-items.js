@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["CHAR_LEN",""]],"fn":[["handler",""],["init",""]],"static":[["HANDLER",""],["INPUT",""]],"struct":[["Input",""]]});

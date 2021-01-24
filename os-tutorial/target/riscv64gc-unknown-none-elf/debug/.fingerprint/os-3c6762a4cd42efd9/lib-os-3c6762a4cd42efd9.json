@@ -1,0 +1,1 @@
+{"rustc":15099370300575543219,"features":"[]","target":5865402158305622236,"profile":14996655781355331481,"path":10872709659218687626,"deps":[],"local":[{"CheckDepInfo":{"dep_info":"riscv64gc-unknown-none-elf\\debug\\.fingerprint\\os-3c6762a4cd42efd9\\dep-lib-os-3c6762a4cd42efd9"}}],"rustflags":["-Clink-arg=-Tsrc/lds/virt.lds"],"metadata":6142912820763317136}

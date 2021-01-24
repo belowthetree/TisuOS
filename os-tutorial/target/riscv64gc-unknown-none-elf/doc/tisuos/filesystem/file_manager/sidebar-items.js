@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["get_cluster_offset",""],["get_fat32_root_file_tree","以 fat32 格式读取磁盘根目录"],["get_fat_info","获取磁盘的 fat32 信息"],["get_file_tree","获取目录的文件树 @ block_idx : 磁盘号 @ cluster : 传入目录的簇号"],["get_mgr",""],["get_next_cluster",""],["get_root","获取磁盘根目录 默认使用 fat32"],["init","功能接口"]],"static":[["FATMANAGER",""]]});

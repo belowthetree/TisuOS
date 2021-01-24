@@ -1,0 +1,1 @@
+initSidebarItems({"mod":[["display","Display 显示模式，考虑作为图形显示前的加工层 2020年12月30日 zg"],["element","Element 基本绘图元素 2020年12月30日 zg"],["implement","elment 接口实现 默认使用第一个 GPU 设备 2020年12月29日 zg"],["mask","Mask 遮罩，用来显示特定区域 2020年12月30日 zg"],["transform","变换 固定变换接口，预计可以提供 3D 的变换 2020年12月29日 zg"]]});

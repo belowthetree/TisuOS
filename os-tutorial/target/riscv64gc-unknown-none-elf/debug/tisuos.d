@@ -1,0 +1,1 @@
+/mnt/g/github/TisuOS/os/target/riscv64gc-unknown-none-elf/debug/tisuos: /mnt/g/github/TisuOS/os/src/cpu.rs /mnt/g/github/TisuOS/os/src/main.rs /mnt/g/github/TisuOS/os/src/trap.rs /mnt/g/github/TisuOS/os/src/uart.rs
