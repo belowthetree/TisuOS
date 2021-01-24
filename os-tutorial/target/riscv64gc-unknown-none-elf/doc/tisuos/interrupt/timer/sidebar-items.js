@@ -1,1 +1,0 @@
-initSidebarItems({"fn":[["get_time","获取当前计时器的计数"],["get_timecmp",""],["set_next_interrupt","设置下一个时间中断的间隔，单位是秒"],["set_next_timer","设置下一个 timer 触发，使用默认 INTERVAL"]],"static":[["FREQUENCY",""],["INTERVAL",""],["MTIME",""],["MTIMECMP",""]]});

@@ -1,1 +1,0 @@
-initSidebarItems({"enum":[["Register",""]],"fn":[["init",""],["m_trap",""]],"static":[["ENVS",""]],"struct":[["Environment","保存需要恢复的环境"]]});

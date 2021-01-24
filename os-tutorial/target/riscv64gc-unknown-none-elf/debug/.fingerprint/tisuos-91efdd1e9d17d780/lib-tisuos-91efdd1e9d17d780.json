@@ -1,1 +1,0 @@
-{"rustc":15099370300575543219,"features":"[]","target":14451817439760162892,"profile":14891217944882224483,"path":10872709659218687626,"deps":[],"local":[{"CheckDepInfo":{"dep_info":"riscv64gc-unknown-none-elf\\debug\\.fingerprint\\tisuos-91efdd1e9d17d780\\dep-lib-tisuos-91efdd1e9d17d780"}}],"rustflags":["-Clink-arg=-Tsrc/lds/virt.lds"],"metadata":10047782358608517475}

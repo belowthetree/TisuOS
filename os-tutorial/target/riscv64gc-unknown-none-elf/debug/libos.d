@@ -1,1 +1,0 @@
-/mnt/g/github/TisuOS/os/target/riscv64gc-unknown-none-elf/debug/libos.a: /mnt/g/github/TisuOS/os/src/cpu.rs /mnt/g/github/TisuOS/os/src/kmem.rs /mnt/g/github/TisuOS/os/src/lib.rs /mnt/g/github/TisuOS/os/src/page.rs /mnt/g/github/TisuOS/os/src/plic.rs /mnt/g/github/TisuOS/os/src/trap.rs /mnt/g/github/TisuOS/os/src/uart.rs

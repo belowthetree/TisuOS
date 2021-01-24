@@ -1,1 +1,0 @@
-initSidebarItems({"constant":[["DEFAULT_COLOR",""]],"enum":[["ColorStyle",""]],"struct":[["Style",""]]});

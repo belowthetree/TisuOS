@@ -1,1 +1,0 @@
-initSidebarItems({"fn":[["from_string",""],["init",""],["output",""],["update","Update 遍历所有 Shell 并调用它们的 update 函数 会作为独立进程挂载，为了避免出现问题同时节省 CPU 消耗，触发中断前阻塞"]],"static":[["SHELL","所有的 Shell 都保存在这"]],"struct":[["Shell","Shell file tree 一个 Shell 对应一个文件树，默认无目录，需要通过 cddisk 进入某一个磁盘的根目录 list 保存当前 Shell 获取的输入"]]});
