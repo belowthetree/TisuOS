@@ -2,9 +2,9 @@
 
 ![](图/系统截图.jpg)
 
-gitee 地址：https://gitee.com/belowthetree/tisu-os
+gitee 地址：https://gitee.com/belowthetree/tisu-os （包含硬盘镜像，最新推送）
 
-github 地址：https://github.com/belowthetree/TisuOS
+github 地址：https://github.com/belowthetree/TisuOS （纯源码版本，删除了镜像、target 文件夹）
 
 ## 编译
 
