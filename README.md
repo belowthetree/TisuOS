@@ -128,5 +128,5 @@ github 地址：https://github.com/belowthetree/TisuOS
 
 ## License
 
-[GPL](./LICENSE)
+[GPL-v3](./LICENSE)
 
