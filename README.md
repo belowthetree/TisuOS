@@ -126,6 +126,48 @@ github 地址：https://github.com/belowthetree/TisuOS （纯源码版本，删�
 
 一个简单的桌面系统，包含命令行窗口、文件夹窗口、Dock。支持一些简单的交互
 
+## 重构部分（未完成）
+
+* 内存管理
+
+  * 算法原理照旧
+  * 拆分了管理结构：bitmap、memory
+  * 添加大量 Result、Option
+  * 简化了 `Memory` 用法
+
+* Block 内存结构
+
+  * 新增内存复制 API
+  * 变为泛型
+  * 将底层部分外内存部分替换为 Block，以此减少不安全代码
+
+* 设备中断
+
+  * 将设备中断处理独立挂载在线程中，避免造成内存部分死锁
+
+* 同步
+
+  * 新增同步结构：Bool，保证读取修改同步，用于设备中断
+
+* 命令行交互
+
+  * 修改 UART 输入 API
+  * `Shell` 变为 `ConsoleShell`，全局唯一
+
+* 文件系统
+
+  * 修改中间层交互方式，更具扩展性
+  * 文件树结构分为：`Directory`、`File`
+  * 文件操作交由 `File` 完成
+
+* 图形底层
+
+  * 改为 ColorBlock 作为底层直接显示单元
+  * 新增 Grid 作为网格显示
+  * ![](./图/图形底层结构.jpg)
+
+  
+
 ## License
 
 [GPL-v3](./LICENSE)
