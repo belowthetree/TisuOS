@@ -2,7 +2,8 @@
 //! 
 //! 2021年1月11日 zg
 
-#[allow(dead_code)]
+#![allow(dead_code)]
+
 #[derive(Debug, PartialEq)]
 #[repr(u16)]
 pub enum Key

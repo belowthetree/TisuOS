@@ -27,6 +27,7 @@ pub struct BlockDevice{
 	pub used_idx : usize,
 	pub queue : *mut Queue,
 	pub ptr : *mut u32,
+	pub int : Bool,
 }
 
 impl BlockDevice {
@@ -37,6 +38,7 @@ impl BlockDevice {
 			used_idx : 0,
 			queue : queue,
 			ptr : ptr,
+			int : Bool::new(),
 		}
 	}
 	pub fn add_idx(&mut self) ->usize {
@@ -91,6 +93,9 @@ impl BlockDevice {
 	}
 	/// 块设备完成数据传输后会在 Queue 的 used 中将 idx 加一
 	pub fn interrupt_handler(&mut self){
+		if !self.int.get() {
+			return;
+		}
 		unsafe{
 			let queue = &*self.queue;
 			while self.used_idx as u16 != queue.used.idx {
@@ -242,7 +247,8 @@ pub fn interrupt_handler(pin_num : usize){
 		if let Some(block) = &mut BLOCKS{
 			for b in block{
 				if b.pin_idx == pin_num{
-					b.interrupt_handler();
+					// b.interrupt_handler();
+					b.int.set();
 					break;
 				}
 			}
@@ -250,7 +256,17 @@ pub fn interrupt_handler(pin_num : usize){
 	}
 }
 
-use crate::{memory::page, task::process::wake_up, uart};
+pub fn run_interrupt() {
+	unsafe {
+		if let Some(block) = &mut BLOCKS{
+			for b in block{
+				b.interrupt_handler();
+			}
+		}
+	}
+}
+
+use crate::{memory::page, sync::Bool, task::process::wake_up, uart};
 use crate::memory::page::{alloc_kernel_page};
 use crate::memory::allocator::{alloc, free};
 use crate::{task::process};

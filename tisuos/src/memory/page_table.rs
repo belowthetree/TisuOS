@@ -30,12 +30,6 @@ impl SATP {
     pub fn is_map(&self)->bool{
         self.get_ppn_addr() != 0
     }
-    pub fn create_page_table(&mut self){
-        let pt = PageTable::new();
-        assert!(!pt.is_null());
-        let ppn = pt as usize;
-        self.flag = ((ppn >> 12) & 0xfff_ffff_ffff) | ((MODE & 0xf) << 60);
-    }
     pub fn free_page_table(&self){
         if self.is_map(){
             let pt = self.get_ppn_addr() as *mut PageTable;
@@ -263,7 +257,7 @@ pub fn map_kernel_area(pt : &mut PageTable, is_kernel : bool){
         }
         else{
             let st = MEMORY_START;
-            let ed = KERNEL_HEAP_START;
+            let ed = MEMORY_START + PAGE_SIZE * 2;
             for addr in (st..ed).step_by(PAGE_SIZE){
                 pt.map_user_code(addr, addr);
             }
@@ -272,4 +266,4 @@ pub fn map_kernel_area(pt : &mut PageTable, is_kernel : bool){
 }
 
 use crate::uart;
-use super::{MEMORY_END, MEMORY_START, page::{KERNEL_HEAP_START, PAGE_SIZE, alloc_kernel_page, free_page}};
+use super::{MEMORY_END, MEMORY_START, page::{PAGE_SIZE, alloc_kernel_page, free_page}};

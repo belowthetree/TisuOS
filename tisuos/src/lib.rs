@@ -68,10 +68,11 @@ extern "C" fn kernel_init(){
     Uart::new().init();
     trap::init(0);
     memory::init();
-    memory::test();
-    console::init();
+    // memory::test();
+    console_input::init();
     plic::init();
     task::init();
+    input_buffer::init();
 
     process::start_init_process();
 }
@@ -91,9 +92,13 @@ mod libs;
 mod interrupt;
 mod interact;
 mod virtio;
-use interact::console;
+mod filesystem;
+mod graphic;
+mod desktop;
+use interact::console_input;
 use interrupt::trap;
 use task::process;
 use uart::Uart;
+use virtio::{input::input_buffer};
 // use alloc::{prelude::v1::*};
 use core::{panic::PanicInfo};

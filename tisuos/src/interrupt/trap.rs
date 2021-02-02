@@ -88,14 +88,14 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
             },
             1 => {
                 panic!("Instruction access fault CPU:{:016x} at epc:{:016x}", hartid, pc);
-            },
+            }
             2 => {
                 panic!("Illegal instruction CPU:{:016x} at epc:{:016x}", hartid, pc);
-            },
+            }
             3 => {
                 println!("Breakpoint");
                 pc += 2;
-            },
+            }
             5 => {
                 panic!("Load access fault CPU:{} at epc:{:016x}", hartid, pc);
             }
@@ -107,10 +107,11 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
             }
             8 | 9 | 11 => {
                 env.regs[Register::A0.val()] = syscall::handler(env);
-                env.epc = pc + 4;
-                thread::schedule(env);
+                // env.epc = pc + 4;
                 pc += 4;
-            },
+                // thread::schedule(env);
+                // pc = waiting as usize;
+            }
             12 => {
                 println!("into m_trap cause: {:x}, hartid: {:x}, status: {:x}, epc: {:x}, sp: {:x}, satp {:x}",
                     cause, hartid, _status, env.epc, _sp, env.satp);
@@ -156,7 +157,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                     ptr.add(2).write_volatile(1);
                     ptr.add(3).write_volatile(1);
                 }
-                thread::schedule(env);
+                // thread::schedule(env);
             },
             11 => {
                 plic::handler();

@@ -4,9 +4,10 @@
 //! 
 //! 2021年1月1日 zg
 
-use core::ops::Sub;
+#![allow(dead_code)]
 
 use alloc::{prelude::v1::*};
+use crate::libs::shape::ScalePoint;
 
 const QUEUE_SIZE : usize = 128;
 static mut MOUSE_CUR_IDX : usize = 0;
@@ -17,7 +18,7 @@ pub static mut KEY_RELEASE_CUR_IDX : usize = 0;
 pub static mut KEY_RELEASE_GET_IDX : usize = 0;
 static mut SCROLL_CUR_IDX : usize = 0;
 static mut SCROLL_GET_IDX : usize = 0;
-static mut MOUSE_POSITION : [Point;QUEUE_SIZE] = [Point::new();QUEUE_SIZE];
+static mut MOUSE_POSITION : [ScalePoint;QUEUE_SIZE] = [ScalePoint::new();QUEUE_SIZE];
 static mut KEY_PRESSED : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE];
 static mut KEY_RELEASE : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE];
 static mut SCROLL : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE]; // 1 是上滑，2 是下滑
@@ -29,7 +30,7 @@ pub fn init(){
     }
 }
 
-pub fn get_mouse_position()->Point{
+pub fn get_mouse_position()->ScalePoint{
     unsafe {
         // let idx = MOUSE_GET_IDX;
         // if MOUSE_CUR_IDX != MOUSE_GET_IDX{
@@ -39,7 +40,7 @@ pub fn get_mouse_position()->Point{
     }
 }
 
-pub fn add_mouse_position(point : Point){
+pub fn add_mouse_position(point : ScalePoint){
     unsafe {
         MOUSE_CUR_IDX = (MOUSE_CUR_IDX + 1) % QUEUE_SIZE;
         MOUSE_POSITION[MOUSE_CUR_IDX] = point;
@@ -134,36 +135,6 @@ pub fn get_scroll()->u16{
     }
 }
 
-/// ## 坐标点
-/// 0 ~ 1，表示在屏幕中的位置比例
-#[derive(Clone, Copy, Debug)]
-pub struct Point{
-    pub x : f32,
-    pub y : f32,
-}
-impl Point {
-    pub const fn new()->Self{
-        Self{
-            x : 0.0,
-            y : 0.0,
-        }
-    }
-}
 
-impl PartialEq for Point{
-    fn eq(&self, other: &Self) -> bool {
-        self.x == other.x && self.y == self.y
-    }
-}
-
-impl Sub for Point{
-    type Output = Self;
-    fn sub(self, rhs: Self) ->Self {
-        Self{
-            x : rhs.x - self.x,
-            y : rhs.y - self.y,
-        }
-    }
-}
 
 // use crate::uart;

@@ -143,7 +143,7 @@ impl InputDevice {
                             let e = ev.pop_front().unwrap();
                             let y = e.value as f32 / 32767.0;
                             ev.pop_front();
-                            add_mouse_position(Point{x:x,y:y});
+                            add_mouse_position(ScalePoint{x:x,y:y});
                         }
                         ABS_EVENTS.replace(ev);
                     },
@@ -253,9 +253,9 @@ pub fn interrupt_handler(pin : usize){
 
 use core::mem::size_of;
 
-use crate::{virtio::{device::{Descriptor, Offset, Queue, StatusField, VIRTIO_DESC_F_WRITE,
+use crate::{libs::shape::ScalePoint, virtio::{device::{Descriptor, Offset, Queue, StatusField, VIRTIO_DESC_F_WRITE,
     VIRTIO_F_RING_EVENT_IDX, VIRTIO_RING_SIZE}}};
 use crate::{memory::{allocator::{alloc}, page::{PAGE_SIZE, alloc_kernel_page}}, uart};
 
-use super::input_buffer::{Point, add_key_press, add_key_release, add_mouse_position, add_scroll};
+use super::input_buffer::{add_key_press, add_key_release, add_mouse_position, add_scroll};
 

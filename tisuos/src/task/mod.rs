@@ -9,4 +9,5 @@ pub mod thread;
 
 pub fn init() {
     process::init();
+    thread::init();
 }

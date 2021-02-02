@@ -211,6 +211,7 @@ pub fn wake_up(tid : usize){
 /// ## 调度函数
 pub fn schedule(env : &Environment){
     save_current(env);
+    sleep_current(env.hartid);
     switch_next(env.hartid);
 }
 
@@ -276,7 +277,7 @@ pub fn delete(tid : usize){
     }
 }
 
-fn save_current(env : &Environment){
+pub fn save_current(env : &Environment){
     unsafe {
         THREAD_LOCK.lock();
         if let Some(threads) = &mut THREAD_LIST{
@@ -292,7 +293,7 @@ fn save_current(env : &Environment){
     }
 }
 
-fn switch_next(hartid : usize){
+pub fn sleep_current(hartid : usize){
     unsafe {
         THREAD_LOCK.lock();
         if let Some(threads) = &mut THREAD_LIST{
@@ -303,6 +304,15 @@ fn switch_next(hartid : usize){
                     break;
                 }
             }
+        }
+        THREAD_LOCK.unlock();
+    }
+}
+
+pub fn switch_next(hartid : usize){
+    unsafe {
+        THREAD_LOCK.lock();
+        if let Some(threads) = &mut THREAD_LIST{
             for t in threads{
                 if t.state == ThreadState::Waiting {
                     t.state = ThreadState::Running;
@@ -344,7 +354,7 @@ pub fn print(){
     unsafe {
         if let Some(list) = &THREAD_LIST{
             for t in list{
-                println!("thread {}, state {:?} in process {}", t.tid, t.state, t.pid);
+                println!("thread {}, state {:?} in process {}, hartid {}", t.tid, t.state, t.pid, t.env.hartid);
             }
         }
         else{

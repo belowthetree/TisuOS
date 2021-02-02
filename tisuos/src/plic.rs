@@ -77,7 +77,7 @@ pub fn handler(){
     if let Some(pin) = claim(){
         match pin {
             1..=8 => {
-                // device::interrupt_handler(pin as usize);
+                device::interrupt_handler(pin as usize);
             }
             10 => {
                 console_input::run();
@@ -91,6 +91,6 @@ pub fn handler(){
 }
 
 
-use crate::{uart};
+use crate::{uart, virtio::device};
 // use virtio::device;
 use crate::interact::console_input;

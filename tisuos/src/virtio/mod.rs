@@ -8,3 +8,8 @@ pub mod gpu_device;
 pub mod input;
 pub mod buffer;
 use input::input_device;
+
+pub fn init() {
+    device::init();
+    buffer::init();
+}

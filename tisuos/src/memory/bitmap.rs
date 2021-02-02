@@ -25,7 +25,7 @@ impl Bitmap {
     }
     /// ### 根据地址找到对应的元素然后释放
     pub fn free(&mut self, idx : usize) {
-        assert!(self.is_bit_alloc(idx));
+        // println!("free {}", idx);
         assert!(self.is_bit_alloc(idx));
         if idx < self.search_idx {
             self.search_idx = idx;
@@ -78,3 +78,4 @@ impl Bitmap {
     }
 }
 
+// use crate::uart;

@@ -31,6 +31,7 @@ pub fn handler(env : &Environment) -> usize {
         57 => {
             let t = get_current_thread(env.hartid).unwrap();
             fork(env, t);
+            rt = 0;
         }
         60 => {
             println!("delete process");
@@ -38,6 +39,7 @@ pub fn handler(env : &Environment) -> usize {
             thread::schedule(env);
         }
         61 => {
+            println!("delete thread");
             thread::delete_current_thread(env.hartid);
             thread::schedule(env);
         }

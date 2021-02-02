@@ -2,6 +2,8 @@
 //! 提供数字字符转换功能
 //! 2020年12月31日 zg
 
+#![allow(dead_code)]
+
 pub fn from_u64(num : u64) ->String {
     let mut n = num;
     let mut rt = String::new();
@@ -22,7 +24,7 @@ pub fn from_u16(num : u16)->String{
     rt
 }
 
-pub fn to_u64(s : String)->u64{
+pub fn as_u64(s : String)->u64{
     let mut rt : u64 = 0;
     for (i, c) in s.bytes().enumerate(){
         if i >= 8{
@@ -85,22 +87,22 @@ pub fn make_shortname(name : &String)->String{
         name += c;
     }
     let (head, tail) = split_back(&name, '.');
-    let mut s = String::new();
+    let mut _s = String::new();
     if head.len() < 8{
-        s = head.to_string();
-        while s.len() < 8{
-            s += " ";
+        _s = head.to_string();
+        while _s.len() < 8{
+            _s += " ";
         }
     }
     else {
-        s = head.split_at(6).0.to_string();
-        s += "~1";
+        _s = head.split_at(6).0.to_string();
+        _s += "~1";
     }
-    s += tail;
-    while s.len() < 11{
-        s += " ";
+    _s += tail;
+    while _s.len() < 11{
+        _s += " ";
     }
-    s
+    _s
 }
 
 

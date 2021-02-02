@@ -225,6 +225,16 @@ pub fn interrupt_handler(num : usize){
     }
 }
 
+pub fn run_interrupt(){
+    loop {
+        unsafe {
+            asm!("wfi"::::"volatile");
+            block_device::run_interrupt();
+            gpu_device::run_interrupt();
+        }
+    }
+}
+
 use core::mem::size_of;
 
 use crate::{sync, uart};

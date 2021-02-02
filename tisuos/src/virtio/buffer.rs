@@ -4,7 +4,7 @@
 
 use core::cmp::min;
 
-use crate::{memory::{page::{PAGE_SIZE, alloc_kernel_page}}, sync::{ReadWriteMutex}};
+use crate::{memory::{block::Block}, sync::{ReadWriteMutex}};
 
 const BUFFER_SIZE : usize = 1024 * 4096; // 4 MB
 const CACHE_SIZE : usize = 2;
@@ -18,24 +18,25 @@ pub struct Buffer{
     block_idx : usize,
     idx : usize,
     size : usize,
-    addr : *mut u8,
+    addr : Block<u8>,
     is_write : bool,
 }
 
 impl Buffer {
     pub fn new(idx : usize)->Self{
-        let n = (BUFFER_SIZE + PAGE_SIZE - 1) / PAGE_SIZE;
+        let b = Block::new(BUFFER_SIZE);
         Self{
             mutex : ReadWriteMutex::new(),
             cnt : 0,
             block_idx : 0,
             idx : idx,
             size : BUFFER_SIZE,
-            addr : alloc_kernel_page(n),
+            addr : b,
             is_write : false,
         }
     }
-    pub fn copy_to(&mut self, target : *mut u8, idx : usize, len : usize){
+    /// ### 拷贝至指定 Block
+    pub fn copy_to(&mut self, idx : usize, target : &Block<u8>, offset : usize, len : usize){
         unsafe {
             COUNTER += 1;
         }
@@ -43,27 +44,30 @@ impl Buffer {
         let size = min(self.idx + self.size - idx, len);
         let st = idx - self.idx;
         self.mutex.read();
-        unsafe {
-            target.copy_from(self.addr.add(st), size);
-        }
+        self.addr.copy_to(st,target, offset, size);
         self.mutex.unlock();
     }
+    /// ### 缓存是否包含给出的磁盘地址
     pub fn is_contain(&self, idx : usize)->bool{
         self.idx <= idx && self.idx + self.size > idx
     }
     pub fn copy_len(&self, idx : usize)->usize{
         self.idx + self.size - idx
     }
+    /// ### 从磁盘读取更新缓存内容
     pub fn refresh(&mut self, block_idx : usize, idx : usize){
         let idx = idx / BUFFER_SIZE * BUFFER_SIZE;
         println!("refresh idx {:x}", idx);
+        // 暂时没有写入要求，如果需要写入，则取消注释
+        // self.write_down();
         self.block_idx = block_idx;
         self.idx = idx;
         self.mutex.write();
-        sync_read(block_idx, self.addr, self.size as u32, idx);
+        sync_read(block_idx, self.addr.get_addr(), self.size as u32, idx);
         self.mutex.unlock();
     }
-    pub fn copy_from(&mut self, src : *mut u8, idx : usize, len : usize){
+    /// ### 从指定 Block 拷贝
+    pub fn copy_from(&mut self, idx : usize, src : &Block<u8>, offset : usize, len : usize){
         unsafe {
             COUNTER += 1;
         }
@@ -71,12 +75,11 @@ impl Buffer {
         let size = min(self.idx + self.size - idx, len);
         let st = idx - self.idx;
         self.mutex.write();
-        unsafe {
-            self.addr.add(st).copy_from(src, size);
-        }
+        self.addr.copy_from(st, src, offset, size);
         self.is_write = true;
         self.mutex.unlock();
     }
+    /// ### 将缓存内容写入磁盘
     pub fn write_down(&mut self){
         if !self.is_write{
             return;
@@ -86,10 +89,11 @@ impl Buffer {
         self.is_write = false;
         self.mutex.unlock();
         self.mutex.read();
-        sync_write(self.block_idx, self.addr, self.size as u32, self.idx);
+        sync_write(self.block_idx, self.addr.get_addr(), self.size as u32, self.idx);
         // println!("buffer.rs wirtedown finish");
         self.mutex.unlock();
     }
+    /// ### 清零
     pub fn zero(&mut self, idx : usize, len : usize){
         unsafe {
             COUNTER += 1;
@@ -99,7 +103,7 @@ impl Buffer {
         let st = idx - self.idx;
         self.mutex.write();
         unsafe {
-            self.addr.add(st).write_bytes(0, size);
+            self.addr.get_addr().add(st).write_bytes(0, size);
         }
         self.is_write = true;
         self.mutex.unlock();
@@ -119,6 +123,9 @@ pub fn init(){
     }
 }
 
+/// ## 定时写入磁盘
+/// 应该挂载在线程中
+#[allow(dead_code)]
 pub fn write_down_handler(){
     loop {
         unsafe {
@@ -134,22 +141,20 @@ pub fn write_down_handler(){
     }
 }
 
-pub fn sync_read_buffer(block_idx : usize, buffer : *mut u8, size : u32, offset : usize){
-    let mut ptr = buffer;
+pub fn sync_read_buffer(block_idx : usize, buffer : &Block<u8>, st : usize, size : u32, offset : usize){
     let mut idx = offset;
+    let mut offset = st;
     let mut len = size as usize;
     unsafe {
         LOCK.write();
     }
     while len > 0{
         if let Some(buf) = find_buffer(idx){
-            buf.copy_to(ptr, idx, len);
-            let l = min(len, buf.copy_len(idx));
-            len -= l;
-            unsafe {
-                ptr = ptr.add(l);
-            }
-            idx += l;
+            buf.copy_to(idx, buffer, offset, len);
+            let count = min(len, buf.copy_len(idx));
+            len -= count;
+            offset += count;
+            idx += count;
         }
         else{
             new_buffer(block_idx, idx);
@@ -160,21 +165,19 @@ pub fn sync_read_buffer(block_idx : usize, buffer : *mut u8, size : u32, offset 
     }
 }
 
-pub fn sync_write_buffer(block_idx : usize, buffer : *mut u8, size : u32, offset : usize){
-    let mut ptr = buffer;
+pub fn sync_write_buffer(block_idx : usize, buffer : &Block<u8>, st : usize, size : u32, offset : usize){
     let mut idx = offset;
+    let mut offset = st;
     let mut len = size as usize;
     unsafe {
         LOCK.write();
     }
     while len > 0{
         if let Some(buf) = find_buffer(idx){
-            buf.copy_from(ptr, idx, len);
+            buf.copy_from(idx, buffer, offset, len);
             let count = min(len, buf.copy_len(idx));
             len -= count;
-            unsafe {
-                ptr = ptr.add(count);
-            }
+            offset += count;
             idx += count;
         }
         else{

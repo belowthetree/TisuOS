@@ -63,7 +63,7 @@ pub fn run(){
     }
 }
 
-pub fn get()->Option<char> {
+pub fn pop()->Option<char> {
     unsafe {
         if let Some(input) = &mut INPUT {
             input.pop()

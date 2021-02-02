@@ -3,7 +3,6 @@
 //! 
 //! 2021年1月25日 zg
 
-pub const PHYSIC_BASE : usize = 0x1000_0000;
 pub const PAGE_SIZE : usize = 4096;
 pub const KERNEL_PAGE_NUM : usize = 51200;
 
@@ -13,9 +12,6 @@ pub struct Page{
 }
 
 impl Page {
-	pub const fn new(flag : PageBit) -> Self{
-		Page{flag : flag.val()}
-	}
 	pub fn free(&mut self){
 		self.flag = 0;
 	}
@@ -31,18 +27,13 @@ impl Page {
 	pub fn is_free(&self)->bool{
 		self.flag == 0
 	}
-	pub fn is_reserved(&self)->bool{
-		self.flag & PageBit::Reserved.val() != 0
-	}
 	pub fn is_taken(&self)->bool{
 		self.flag & PageBit::Taken.val() == PageBit::Taken.val()
 	}
 	pub fn is_end(&self)->bool{
 		self.flag & PageBit::End.val() == PageBit::End.val()
 	}
-	pub fn set_flag(&mut self, flag : u8){
-		self.flag |= flag;
-	}
+
 }
 
 #[derive(Copy, Clone)]
@@ -153,8 +144,8 @@ pub fn free_page(addr : *mut u8) {
 		if n <= NUM_RESERVE {
 			return;
 		}
-		let ptr = PAGE_START_ADDR as *mut Page;
-		let mut idx = n - NUM_RESERVE;
+		let ptr = PAGE_START_ADDR;
+		let mut idx = n;
 		while !(*ptr.add(idx)).is_end() {
 			(*ptr.add(idx)).free();
 			idx += 1;

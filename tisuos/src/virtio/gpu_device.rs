@@ -70,8 +70,10 @@ pub struct GPU{
     write_idx : usize,
     mutex : Mutex,
     valid : bool,
+    int : Bool,
 }
 
+/// ## GPU 交互函数
 impl GPU {
     pub fn new(queue : *mut Queue, ptr : *mut u32, idx : usize)->Self{
         let n = (WIDTH * HEIGHT * size_of::<Pixel>() + PAGE_SIZE - 1) / PAGE_SIZE + 2;
@@ -91,6 +93,7 @@ impl GPU {
             write_idx : 2,
             mutex : Mutex::new(),
             valid : true,
+            int : Bool::new(),
         }
     }
     /// 清空屏幕 rgba（10，10，10，255）
@@ -171,64 +174,9 @@ impl GPU {
         self.add_desc(header as u64, size_of::<ControllHeader>() as u32, VIRTIO_DESC_F_WRITE);
         self.add_ring(head_idx);
     }
-    /// 覆盖着色
-    pub fn draw_rect_override(&mut self, rect : Rect, color_buffer : *mut Pixel){
-        if rect.x1 as usize >= self.width || rect.y1 as usize > self.height{
-            return;
-        }
-        let st = rect.y1 as usize * self.width;
-        let ed = min(rect.y2 as usize, self.height) * self.width;
-        let ptr = color_buffer;
-        let mut idx;
-        let mut row = 0;
-        let width = (rect.x2 - rect.x1) as usize;
-        let line = (min(rect.x2, self.width as u32) - rect.x1) as usize;
-        self.mutex.lock();
-        for y in (st..ed).step_by(self.width){
-            idx = row * width;
-            unsafe {
-                self.frame_buffer.add(y + rect.x1 as usize).copy_from(ptr.add(idx), line);
-            }
-            row += 1;
-        }
-        self.mutex.unlock();
-    }
-    /// 透明度着色
-    pub fn draw_rect_blend(&mut self, rect : Rect, color_buffer : *mut Pixel){
-        if rect.x1 as usize >= self.width || rect.y1 as usize > self.height{
-            return;
-        }
-        let st = rect.y1 as usize * self.width;
-        let ed = min(rect.y2 as usize, self.height) * self.width;
-        let ptr = color_buffer as *const Pixel;
-        let mut idx = 0;
-        self.mutex.lock();
-        let t = 1.0 / 255.0;
-        for y in (st..ed).step_by(self.width){
-            for x in rect.x1..min(rect.x2, self.width as u32){
-                unsafe {
-                    let id = x as usize + y;
-                    let color1 = *ptr.add(idx);
-                    let color2 = *self.frame_buffer.add(id);
-                    let rate =  color1.a as f32 * t;
-                    let rate2 = 1.0 - rate;
-                    let color = Pixel{
-                        r : (color1.r as f32 * rate) as u8 + (color2.r as f32 * rate2) as u8,
-                        g : (color1.g as f32 * rate) as u8 + (color2.g as f32 * rate2) as u8,
-                        b : (color1.b as f32 * rate) as u8 + (color2.b as f32 * rate2) as u8,
-                        a : (color1.a as f32 * rate) as u8 + (color2.a as f32 * rate2) as u8,
-                    };
-                    self.frame_buffer.add(id).write_volatile(color);
-                    idx += 1;
-                }
-            }
-        }
-        self.mutex.unlock();
-    }
     /// 发送 QueueNotify
     fn run(&mut self){
         unsafe {
-            // println!("{:x} {}", self.ptr as usize, Offset::QueueNotify.scale32());
             *(self.ptr.add(Offset::QueueNotify.scale32())) = 0;
         }
     }
@@ -271,7 +219,89 @@ impl GPU {
             }
         }
     }
+    pub fn interrupt_handler(&mut self) {
+        if !self.int.get() {
+            return;
+        }
+        unsafe {
+            let queue = &*self.queue;
+            while self.used_idx as u16 != queue.used.idx {
+                let ref elem = queue.used.ring
+                    [self.used_idx as usize % VIRTIO_RING_SIZE];
+                let mut idx = elem.id as usize;
+                while queue.desc[idx].flags & VIRTIO_DESC_F_NEXT != 0 {
+                    free(queue.desc[idx].addr as *mut u8);
+                    idx = queue.desc[idx].next as usize;
+                }
+                if (*(queue.desc[idx].addr as *const ControllHeader)).ctype != ControllType::RespOkNoData{
+                    println!("GPU Err {:?}", (*(queue.desc[idx].addr as *const ControllHeader)).ctype);
+                }
+                free(queue.desc[idx].addr as *mut u8);
+                self.used_idx = self.used_idx.wrapping_add(1);
+            }
+            self.mutex.unlock();
+        }
+    }
+}
 
+/// ## framebuffer 绘制函数
+/// 使用单重锁保证不出现闪烁、重叠现象
+impl GPU {
+        /// ### 覆盖着色
+        pub fn draw_rect_override(&mut self, rect : Rect, color_buffer : *mut Pixel){
+            if rect.x1 as usize >= self.width || rect.y1 as usize > self.height{
+                return;
+            }
+            let st = rect.y1 as usize * self.width;
+            let ed = min(rect.y2 as usize, self.height) * self.width;
+            let ptr = color_buffer;
+            let mut idx;
+            let mut row = 0;
+            let width = (rect.x2 - rect.x1) as usize;
+            let line = (min(rect.x2, self.width as u32) - rect.x1) as usize;
+            self.mutex.lock();
+            for y in (st..ed).step_by(self.width){
+                idx = row * width;
+                unsafe {
+                    self.frame_buffer.add(y + rect.x1 as usize).copy_from(ptr.add(idx), line);
+                }
+                row += 1;
+            }
+            self.mutex.unlock();
+        }
+        /// ### 透明度着色
+        /// 包含大量浮点数运算，速度较慢
+        pub fn draw_rect_blend(&mut self, rect : Rect, color_buffer : *mut Pixel){
+            if rect.x1 as usize >= self.width || rect.y1 as usize > self.height{
+                return;
+            }
+            let st = rect.y1 as usize * self.width;
+            let ed = min(rect.y2 as usize, self.height) * self.width;
+            let ptr = color_buffer as *const Pixel;
+            let mut idx = 0;
+            self.mutex.lock();
+            let t = 1.0 / 255.0;
+            for y in (st..ed).step_by(self.width){
+                for x in rect.x1..min(rect.x2, self.width as u32){
+                    unsafe {
+                        let id = x as usize + y;
+                        let color1 = *ptr.add(idx);
+                        let color2 = *self.frame_buffer.add(id);
+                        let rate =  color1.a as f32 * t;
+                        let rate2 = 1.0 - rate;
+                        let color = Pixel{
+                            r : (color1.r as f32 * rate) as u8 + (color2.r as f32 * rate2) as u8,
+                            g : (color1.g as f32 * rate) as u8 + (color2.g as f32 * rate2) as u8,
+                            b : (color1.b as f32 * rate) as u8 + (color2.b as f32 * rate2) as u8,
+                            a : (color1.a as f32 * rate) as u8 + (color2.a as f32 * rate2) as u8,
+                        };
+                        self.frame_buffer.add(id).write_volatile(color);
+                        idx += 1;
+                    }
+                }
+            }
+            self.mutex.unlock();
+        }    
 }
 
 pub const WIDTH : usize = 640;
@@ -325,39 +355,31 @@ pub fn init_gpu(ptr : *mut u32, idx : usize) ->bool {
     }
 }
 
+/// ## 处理 GPU 中断
+/// 中断触发之后回收控制头内存
 pub fn pending(pin : usize) {
-	// Here we need to check the used ring and then free the resources
-	// given by the descriptor id.
 	unsafe {
         if let Some(gpu) = &mut DEVICE{
             for dev in gpu{
                 if dev.device_idx == pin{
-                    let queue = &*dev.queue;
-                    while dev.used_idx as u16 != queue.used.idx {
-                        let ref elem = queue.used.ring
-                            [dev.used_idx as usize % VIRTIO_RING_SIZE];
-                        let mut idx = elem.id as usize;
-                        while queue.desc[idx].flags & VIRTIO_DESC_F_NEXT != 0 {
-                            free(queue.desc[idx].addr as *mut u8);
-                            idx = queue.desc[idx].next as usize;
-                        }
-                        if (*(queue.desc[idx].addr as *const ControllHeader)).ctype != ControllType::RespOkNoData{
-                            println!("GPU Err {:?}", (*(queue.desc[idx].addr as *const ControllHeader)).ctype);
-                        }
-                        free(queue.desc[idx].addr as *mut u8);
-                        dev.used_idx = dev.used_idx.wrapping_add(1);
-                    }
-                    dev.mutex.unlock();
+                    dev.int.set();
                 }
             }
         }
-        
 	}
 }
 
-/// ## 绘图api
-/// 
+pub fn run_interrupt() {
+    unsafe {
+        if let Some(gpu) = &mut DEVICE{
+            for dev in gpu{
+                dev.interrupt_handler()
+            }
+        }
+	}
+}
 
+/// ## 覆盖绘制
 pub fn draw_rect_override(device_idx : usize, rect : Rect, color_buffer : *mut Pixel){
     unsafe {
         if let Some(gpus) = &mut DEVICE{
@@ -367,6 +389,7 @@ pub fn draw_rect_override(device_idx : usize, rect : Rect, color_buffer : *mut P
     }
 }
 
+/// ## 透明度绘制
 pub fn draw_rect_blend(device_idx : usize, rect : Rect, color_buffer : *mut Pixel){
     unsafe {
         if let Some(gpus) = &mut DEVICE{
@@ -376,6 +399,8 @@ pub fn draw_rect_blend(device_idx : usize, rect : Rect, color_buffer : *mut Pixe
     }
 }
 
+/// ## 将帧缓冲传送到 GPU 显示，绘制完成后调用
+/// 目前没有设置双缓冲
 pub fn invalid(){
     unsafe {
         if let Some(gpus) = &mut DEVICE{
@@ -390,10 +415,11 @@ pub fn invalid(){
     }
 }
 
-pub fn reset(device_idx : usize){
+/// ## 清屏，设置为默认颜色
+pub fn reset(gpu_idx : usize){
     unsafe {
         if let Some(gpus) = &mut DEVICE{
-            let gpu = &mut gpus[device_idx];
+            let gpu = &mut gpus[gpu_idx];
             gpu.reset();
         }
     }
@@ -506,14 +532,6 @@ impl ResourceFlush {
 
 ///////
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Rect{
-    pub x1 : u32,
-    pub y1 : u32,
-    pub x2 : u32,
-    pub y2 : u32,
-}
 #[allow(dead_code)]
 #[repr(C)]
 #[derive(Debug)]
@@ -559,7 +577,7 @@ pub enum ControllType {
 	RespErrInvalidParameter,
 }
 
-use crate::{memory::{allocator::{alloc, free}, page::{PAGE_SIZE, alloc_kernel_page}}, sync::Mutex, uart};
+use crate::{libs::shape::Rect, memory::{allocator::{alloc, free}, page::{PAGE_SIZE, alloc_kernel_page}}, sync::{Bool, Mutex}, uart};
 use core::{cmp::min, mem::size_of};
 use alloc::{prelude::v1::*};
 use device::{Descriptor, VIRTIO_DESC_F_NEXT, VIRTIO_DESC_F_WRITE};

@@ -5,14 +5,14 @@
 //! 2020年11月 zg
 
 #![allow(dead_code)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum MutexState{
     Unlock = 0,
     Lock = 1,
 }
 /// ## 多重锁
-/// 多重锁，允许一个核心多次上锁，这是为了解决单重锁在多重函数中反复上锁的需求
+/// 多重锁，允许一个核心多次上锁，这是为了解决单重锁在多重函数中反复上锁的需求,后期应当避免使用此锁
 #[repr(C)]
 pub struct MultiMutex {
     mutex : Mutex,
@@ -24,7 +24,7 @@ pub struct MultiMutex {
 /// 单次锁，仅仅针对简单的同步要求
 #[repr(C)]
 pub struct Mutex{
-    state : MutexState,
+    pub state : MutexState,
 }
 
 /// ## 读写锁
@@ -33,6 +33,36 @@ pub struct ReadWriteMutex{
     mutex : Mutex,
     read_cnt : usize,
     write : bool,
+}
+
+/// ## 同步布尔值
+/// 目前主要用于循环判断
+pub struct Bool {
+    state : MutexState,
+}
+
+impl Bool {
+    pub const fn new()->Self {
+        Self {
+            state : MutexState::Unlock,
+        }
+    }
+    pub fn get(&mut self)->bool {
+        unsafe {
+            let state : MutexState;
+            asm!("amoswap.w.aq $0, $1, ($2)\n" : "=r"(state) : "r"(0), "r"(self) :: "volatile");
+            match state {
+                MutexState::Lock => {false}
+                MutexState::Unlock => {true}
+            }
+        }
+    }
+    pub fn set(&mut self) {
+        unsafe {
+            let state = &mut self.state;
+            asm!("amoswap.w.rl zero, $1, ($0)" :: "r"(state), "r"(1) :: "volatile");
+        }
+    }
 }
 
 /// 上锁原理：

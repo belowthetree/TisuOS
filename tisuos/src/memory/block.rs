@@ -5,21 +5,21 @@
 //! 
 //! 2020年12月 zg
 
-pub struct Block<T : Copy>{
+pub struct Block<T>{
     addr : *mut T,
     pub size : usize,
 }
 
 #[allow(dead_code)]
-impl<T : Copy> Block<T> {
-    pub fn new(size : usize)->Block<T>{
-        let addr = alloc(size * size_of::<T>(), true).unwrap() as *mut T;
+impl<T1:Copy> Block<T1> {
+    pub fn new(size : usize)->Block<T1>{
+        let addr = alloc(size * size_of::<T1>(), true).unwrap() as *mut T1;
         Block {
             addr : addr,
             size : size,
         }
     }
-    pub fn get(&self, idx : usize)->Option<T>{
+    pub fn get(&self, idx : usize)->Option<T1>{
         if idx >= self.size{
             None
         }
@@ -29,41 +29,60 @@ impl<T : Copy> Block<T> {
             }
         }
     }
-    pub fn set(&mut self, idx : usize, val : T, len : usize){
+    pub fn set(&self, idx : usize, val : T1, len : usize){
         assert!(idx < self.size);
         unsafe {
             let ptr = self.addr;
-            for i in idx..min(len, self.size) {
+            for i in idx..min(idx + len, self.size) {
                 ptr.add(i).write_volatile(val);
             }
         }
     }
 
-    pub fn copy_to(&self, other : &Block<T>, len : usize){
+    /// ## 拷贝
+    /// 长度以 other 为准
+    pub fn copy_to<T2:Copy>(&self, st1 : usize, other : &Block<T2>, st2 : usize, len : usize){
+        assert!(st1 < self.size && st2 < other.size);
         unsafe {
-            let ptr = other.addr;
-            let count = min(self.size, other.size);
-            let count = min(len, count);
-            self.addr.copy_to(ptr, count);
+            let ptr1 = self.addr.add(st1) as *mut u8;
+            let ptr2 = other.addr.add(st2) as *mut u8;
+            let count = min((self.size - st1) * size_of::<T1>(), (other.size - st2) * size_of::<T2>());
+            let count = min(len * size_of::<T2>(), count);
+            ptr1.copy_to(ptr2, count);
+        }
+    }
+
+    /// ## 拷贝
+    /// 长度以 other 为准
+    pub fn copy_from<T2:Copy>(&self, st1 : usize, other : &Block<T2>, st2 : usize, len : usize) {
+        assert!(st1 < self.size && st2 < other.size);
+        unsafe {
+            let ptr2 = other.addr.add(st1) as *mut u8;
+            let ptr1 = self.addr.add(st2) as *mut u8;
+            let count = min((self.size - st1) * size_of::<T1>(), (other.size - st2) * size_of::<T2>());
+            let count = min(len * size_of::<T2>(), count);
+            ptr1.copy_from(ptr2, count);
         }
     }
     
-    pub fn copy_from(&self, other : &Block<T>, len : usize) {
-        unsafe {
-            let ptr = other.addr;
-            let count = min(self.size, other.size);
-            let count = min(len, count);
-            other.addr.copy_to(ptr, count);
-        }
+    pub fn get_addr(&self)->*mut T1 {
+        self.addr
     }
-    
+
+    pub fn convert<T2:Copy>(self)->Block<T2> {
+        let size = self.size * size_of::<T1>() / size_of::<T2>();
+        let rt = Block::<T2>::new(size);
+        rt.copy_from(0, &self, 0, self.size);
+        rt
+    }
 }
 
-impl<T : Copy> Drop for Block<T>{
+impl<T> Drop for Block<T>{
     fn drop(&mut self) {
         free(self.addr as *mut u8);
     }
 }
 
+use crate::uart;
 use core::{cmp::min, mem::size_of};
 use super::allocator::{alloc, free};

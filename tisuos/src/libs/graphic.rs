@@ -2,6 +2,7 @@
 //! 
 //! 2021年1月25日 zg
 
+#![allow(dead_code)]
 
 #[derive(Clone, Copy)]
 #[repr(C)]

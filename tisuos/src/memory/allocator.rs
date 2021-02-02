@@ -18,7 +18,7 @@ fn align(x : usize) -> usize{
 const MEMORY_TOO_BIG : usize = PAGE_SIZE;
 const MEMORY_SIZE_INSIDE : usize = PAGE_SIZE / 20;
 
-struct Memory {
+pub struct Memory {
     physic_base : *mut u8,
     size : usize,
     next : Option<*mut Memory>,
@@ -48,7 +48,6 @@ impl Memory {
             }
             // 没有足够空间，申请新的
             else {
-                println!("alloc new {}", size);
                 match self.new(size) {
                     Some(m) => rt = m,
                     None => return None
@@ -67,7 +66,8 @@ impl Memory {
     pub fn free(&mut self, addr : *mut u8) {
         unsafe {
             let mut head = self.next;
-            while head.is_some() && !(*head.unwrap()).is_contain(addr){
+
+            while !(*head.unwrap()).is_contain(addr){
                 head = (*head.unwrap()).next;
             }
 
@@ -78,7 +78,6 @@ impl Memory {
                 let size = node.size;
                 let free_cnt = self.get_free_block_num(size);
                 let use_cnt = self.get_used_block_num(size);
-                println!("free {}, used {}", free_cnt, use_cnt);
                 if free_cnt > 1 && free_cnt * 2 > use_cnt {
                     // 如果块结构体在自己管理的页表内
                     if node.is_inside() {
@@ -261,7 +260,7 @@ impl Memory {
     /// ### 删除给定的元素，仅从链表中删除，不做其它操作
     fn delete(&mut self, node : *mut Memory){
         unsafe {
-            let mut head = self.next;
+            let mut head = Some(self as *mut Memory);
             while (*head.unwrap()).next.unwrap() != node {
                 head = (*head.unwrap()).next;
             }
@@ -283,7 +282,7 @@ impl Memory {
     }
 }
 
-static mut KERNEL_ALLOCATOR : Memory = Memory::empty(true);
+pub static mut KERNEL_ALLOCATOR : Memory = Memory::empty(true);
 static mut USER_ALLOCATOR : Memory = Memory::empty(false);
 static mut MEMORY_LOCK : Mutex = Mutex::new(); // 内存控制同步锁
 
@@ -385,6 +384,21 @@ pub fn print() {
 
 pub fn test(){
     println!("test global_allocator alloc");
+
+    {
+        let mut s = String::new();
+        for i in 0..500 {
+            s.push('a');
+            if i % 100 == 0 {
+                s.push('.');
+            } 
+        }
+        let _ : Vec::<&str> = s.split('.').collect();
+        while s.len() > 0 {
+            s.pop();
+        }
+    }
+
     for i in 0..50 {
         alloc(i + 1, true);
         // println!("alloc addr {:x}", alloc(i + 1, true).unwrap() as usize);

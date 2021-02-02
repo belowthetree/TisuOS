@@ -5,6 +5,7 @@
 
 use alloc::{prelude::v1::*};
 use thread::{create_thread, delete, get_current_thread, get_thread_by_id, run};
+use virtio::device;
 
 extern "C" {
     fn switch_kernel_process(env : *mut u8) -> usize;
@@ -159,7 +160,6 @@ impl Process {
 /// 进程的释放发生在被从调度队列中剔除
 impl Drop for Process{
     fn drop(&mut self) {
-        // println!("free process {}", self.pid);
         SATP::from(self.satp).free_page_table();
         unsafe {(*self.heap_list).free(self.is_kernel);}
     }
@@ -181,7 +181,6 @@ pub fn init(){
         }
         PROCESS_LIST = Some(VecDeque::new());
     }
-    thread::init();
 }
 
 ///
@@ -230,7 +229,6 @@ pub fn add_process(p : Process) {
     }
 }
 
-///
 /// ## 线程控制部分
 /// 
 
@@ -309,21 +307,23 @@ pub fn create_process(func : usize, is_kernel : bool)->Option<Process>{
 
 /// 初始化进程
 pub fn init_process(){
-    // if fork() != 0 {
-    //     shell::update();
-    // }
+    if fork() != 0 {
+        device::run_interrupt();
+    }
+    timer::set_next_interrupt(0);
+    virtio::init();
+    filesystem::init();
+    gpu_device::reset(0);
+    if fork() != 0 {
+        println!("fork shell");
+        console_shell::run();
+    }
     // if fork() != 0{
     //     buffer::write_down_handler();
     // }
     // Desktop::new();
     // if fork() != 0 {
     //     desktop::run();
-    // }
-    println!("before set");
-    timer::set_next_interrupt(1);
-    println!("after set");
-    // if fork() != 0 {
-    //     gpu_device::refresh();
     // }
     unsafe {
         loop {
@@ -333,12 +333,11 @@ pub fn init_process(){
 }
 
 extern crate alloc;
-use crate::{interrupt::timer, memory::{allocator, user_allocator::MemoryList}, sync::Mutex};
+use crate::{filesystem, interact::console_shell, interrupt::timer, libs::syscall::{fork, list_thread}, memory::{allocator, user_allocator::MemoryList}, sync::Mutex, virtio::{self, gpu_device}};
 // use syscall::fork;
 use core::{mem::size_of, ptr::null_mut};
 use alloc::{collections::VecDeque};
-use page::{PAGE_SIZE};
-use page_table::{SATP, PageBit};
-use crate::{interrupt::trap::{Environment, Register},memory::page_table, memory::page, uart, };
+use page_table::{SATP};
+use crate::{interrupt::trap::{Environment, Register},memory::page_table, uart, };
 
 use super::thread::{self, Thread};
