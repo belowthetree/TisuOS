@@ -17,6 +17,7 @@ pub struct Content {
     pub ctx : Grid,
     pub ctype : ContentType,
     pub directory : Directory,
+    pub shell : InterShell,
     pub idx : usize,
 }
 
@@ -39,17 +40,13 @@ impl Content {
             ctx : grid,
             ctype : ctype,
             directory : dir,
+            shell : InterShell::new(),
             idx : 0,
         };
         if ctype == ContentType::File {
             rt.refresh();
         }
         rt
-    }
-    pub fn list_file(&self) {
-        if self.ctype == ContentType::Text {
-            return;
-        }
     }
     pub fn scroll(&mut self, offset : isize) {
         self.ctx.scroll(offset);
@@ -60,13 +57,62 @@ impl Content {
     pub fn translate(&mut self, vec : Vector) {
         self.ctx.translate(vec);
     }
-    pub fn write_text(&mut self, c : char) {
+    pub fn get_key(&mut self, c : char) {
+        self.write_char(c, FONT_COLOR);
+        let rt = self.shell.input(c);
+        if let Some(event) = rt {
+            self.do_shell_event(event);
+        }
+    }
+    fn write_char(&mut self, c : char, color : Pixel) {
         if c == '\n' || c == '\r' {
             self.idx = self.idx + self.ctx.line_num - self.idx % self.ctx.line_num;
         }
         else {
-            self.ctx.fill_font(self.idx, c, FONT_COLOR, BACKGROUND);
+            self.ctx.fill_font(self.idx, c, color, BACKGROUND);
             self.idx += 1;
+        }
+    }
+    fn write_string(&mut self, s : &String, color : Pixel) {
+        for c in s.bytes() {
+            self.write_char(c as char, color);
+        }
+    }
+    fn do_shell_event(&mut self, event : ShellEvent) {
+        match event {
+            ShellEvent::SwitchDirectory(path) => {
+                if path == ".." {
+                    if let Some(dir) = self.directory.get_parent_directory() {
+                        self.directory = dir;
+                    }
+                }
+                else if let Some(dir) = self.directory.get_sub_directory(&path) {
+                    self.directory = dir;
+                }
+            }
+            ShellEvent::Output(s) => {
+                self.write_string(&s, FONT_COLOR);
+            }
+            ShellEvent::List => {
+                let mut items = Vec::<DirItem>::new();
+                for file in self.directory.items.iter() {
+                    let t = file.clone();
+                    items.push(t);
+                }
+                for item in items {
+                    let color;
+                    if item.is_file() {
+                        color = Pixel::green();
+                    }
+                    else {
+                        color = Pixel::yellow();
+                    }
+                    self.write_string(&(item.name + " "), color);
+                }
+                self.write_char('\n', FONT_COLOR);
+            }
+            ShellEvent::SwitchDisk(_) => {}
+            ShellEvent::Exec(_) => {}
         }
     }
     pub fn do_mouse_event(&mut self, event : MouseEvent) {
@@ -80,7 +126,12 @@ impl Content {
                         if idx < self.directory.items.len() {
                             let dir = self.directory.items.get(idx).unwrap();
                             if dir.is_dir() {
-                                self.directory = self.directory.get_sub_directory(&dir.name).unwrap();
+                                if dir.name == ".." {
+                                    self.directory = self.directory.get_parent_directory().unwrap();
+                                }
+                                else {
+                                    self.directory = self.directory.get_sub_directory(&dir.name).unwrap();
+                                }
                                 self.refresh();
                             }
                         }
@@ -106,7 +157,6 @@ impl Content {
             b.fill_image(10, 0, &image);
             let name = file.name.trim();
             let mut x = (FILE_SIZE - min(FILE_SIZE, name.len() * FONT_WIDTH)) / 2;
-            println!("x {}", x);
             for (_, c) in name.bytes().enumerate() {
                 b.fill_font(x, 60, c as char, FONT_HEIGHT, FONT_WIDTH, Pixel::black(), Pixel::white());
                 x += FONT_WIDTH;
@@ -122,17 +172,19 @@ impl Content {
     pub fn return_dir(&mut self) {
         if let Some(dir) = self.directory.get_parent_directory() {
             self.directory = dir;
-            self.refresh();
+            if self.ctype == ContentType::File {
+                self.refresh();
+            }
         }
     }
 }
 
 use core::cmp::min;
 
-use crate::{filesystem::{filetree::directory::{Directory}, image::image::Image}, graphic::canvas::texblock::TexBlock, libs::shape::Position};
+use crate::{filesystem::{filetree::directory::{DirItem, Directory}, image::image::Image}, graphic::canvas::texblock::TexBlock, interact::intershell::{InterShell, ShellEvent}, libs::shape::Position};
 use alloc::prelude::v1::*;
 use crate::{graphic::canvas::{grid::Grid}, libs::{font::{FONT_HEIGHT, FONT_WIDTH}, graphic::Pixel, shape::{Vector}}};
 use crate::uart;
 
-use super::mouse::MouseEvent;
+use super::{keyboard::KeyboardEvent, mouse::MouseEvent};
 

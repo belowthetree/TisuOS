@@ -37,10 +37,11 @@ impl Directory {
             Some(tree)
         }
         else{
-            println!("no root");
+            println!("no root {}", path);
             None
         }
     }
+
     pub fn new(name : String, items : Vec::<DirItem>, st_cluster : usize, block_idx : usize)->Self {
         Directory {
             name : name,
@@ -96,7 +97,7 @@ impl Directory {
     
     pub fn get_file(&self, filename : String) ->Option<File>{
         for item in &self.items{
-            if item.is_file() && item.filename == filename{
+            if item.is_file() && item.name == filename{
                 return item.get_file();
             }
         }
@@ -105,7 +106,7 @@ impl Directory {
     /// 获取当前目录项的引用
     pub fn get_item<'a>(&'a self, filename : &String)->Option<&'a DirItem> {
         for item in &self.items{
-            if item.filename == *filename{
+            if item.name == *filename{
                 return Some(item);
             }
         }
@@ -114,25 +115,37 @@ impl Directory {
     
     pub fn has_shortname(&self, name : &String)->bool{
         for item in self.items.iter(){
-            if make_shortname(&item.filename) == *name{
+            if make_shortname(&item.name) == *name{
                 return true;
             }
         }
         false
     }
 }
+
+
 pub struct DirItem{
-    pub filename : String,
     pub name : String,
     pub start_cluster : usize,
     pub block_idx : usize,
     pub size : usize,
     pub idx : usize,
     pub len : usize,
-    attr : u8,
+    pub attr : u8,
 }
 
 impl DirItem {
+    pub fn clone(&self)->Self {
+        Self {
+            name : self.name.clone(),
+            start_cluster : self.start_cluster,
+            block_idx : self.block_idx,
+            size : self.size,
+            idx : self.idx,
+            len : self.len,
+            attr : self.attr,
+        }
+    }
     pub fn new(name : String, st_cluster : usize, attr : u8,
             block_idx : usize, size : usize, idx : usize, len : usize) -> Self {
         let mut s = String::new();
@@ -141,9 +154,8 @@ impl DirItem {
                 s.push(c as char);
             }
         }
-        let filename = s.clone();
+
         DirItem{
-            filename : filename,
             name : s,
             start_cluster : st_cluster,
             block_idx : block_idx,

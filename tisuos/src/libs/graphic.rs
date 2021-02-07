@@ -87,3 +87,12 @@ impl Pixel{
         }
     }
 }
+
+
+/// ## 颜色字符
+#[derive(Clone, Copy)]
+pub struct ColorChar{
+    pub color : Pixel,
+    pub c : char,
+}
+

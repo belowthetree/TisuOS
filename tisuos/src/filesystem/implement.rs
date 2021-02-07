@@ -149,7 +149,7 @@ impl DoDirectory for FATManger{
             if item.is_dir(){
                 return false;
             }
-            println!("get item {}", item.filename);
+            println!("get item {}", item.name);
             self.delete_sequence_fat_item(item.start_cluster);
             self.delete_sequence_dir_item(tree.start_cluster, item.idx, item.len);
             true

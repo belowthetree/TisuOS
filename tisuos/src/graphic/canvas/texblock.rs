@@ -80,12 +80,6 @@ impl GridBlock for TexBlock {
     }
 }
 
-impl Drop for TexBlock {
-    fn drop(&mut self) {
-        println!("texblock drop");
-    }
-}
-
 use core::cmp::min;
 use crate::{libs::font::{FONT_ASCII, FONT_HEIGHT, FONT_WIDTH}, uart};
 use crate::{filesystem::image::{image::Image}, libs::graphic::Pixel, memory::block::Block};

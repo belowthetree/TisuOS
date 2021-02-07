@@ -225,7 +225,7 @@ impl File {
         }
         else{
             let file = File{
-                filename : tree_item.filename[..].to_string(),
+                filename : tree_item.name[..].to_string(),
                 start_cluster : tree_item.start_cluster,
                 block_idx : tree_item.block_idx,
                 size : tree_item.size,

@@ -94,7 +94,7 @@ impl Window {
             KeyboardEventType::KeyDown => {
                 match event.key.to_char() {
                     Some(c) => {
-                        self.content.write_text(c);
+                        self.content.get_key(c);
                         v = PlaneEvent::WindowInvalid;
                     }
                     _ => {}

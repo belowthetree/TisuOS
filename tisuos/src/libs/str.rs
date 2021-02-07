@@ -46,6 +46,7 @@ pub fn convert_to_usize(s : &String)->usize{
     rt
 }
 
+/// ## 短文件名校验和计算
 pub fn check_sum(s : &String)->u8{
     let mut rt : u8 = 0;
     for (i, c) in s.bytes().enumerate(){
@@ -63,6 +64,7 @@ pub fn check_sum(s : &String)->u8{
     rt
 }
 
+/// ## 从后往前拆
 pub fn split_back(s : &String, p : char)->(&str, &str){
     let mut idx = 0;
     for (i, c) in s.bytes().enumerate(){
