@@ -42,22 +42,25 @@ pub struct Bool {
 }
 
 impl Bool {
+    /// ### 初始化为 unlock，对应 false
     pub const fn new()->Self {
         Self {
             state : MutexState::Unlock,
         }
     }
+    /// ### 获取并置为 unlock（false）
     pub fn get(&mut self)->bool {
         unsafe {
             let state : MutexState;
             asm!("amoswap.w.aq $0, $1, ($2)\n" : "=r"(state) : "r"(0), "r"(self) :: "volatile");
             match state {
-                MutexState::Lock => {false}
-                MutexState::Unlock => {true}
+                MutexState::Lock => {true}
+                MutexState::Unlock => {false}
             }
         }
     }
-    pub fn set(&mut self) {
+    /// ### 置为 lock（true）
+    pub fn set_true(&mut self) {
         unsafe {
             let state = &mut self.state;
             asm!("amoswap.w.rl zero, $1, ($0)" :: "r"(state), "r"(1) :: "volatile");

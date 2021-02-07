@@ -6,6 +6,7 @@
 
 pub mod process;
 pub mod thread;
+mod info;
 
 pub fn init() {
     process::init();

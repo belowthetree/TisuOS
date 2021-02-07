@@ -24,7 +24,7 @@ pub struct BMP{
 
 impl BMP {
     pub fn is_bmp(&self)->bool{
-        // println!("{}BM", &from_u16(self.btype)[..]);
+        // println!("{} BM", &from_u16(self.btype)[..]);
         &from_u16(self.btype)[..] == "BM"
     }
 }
@@ -49,12 +49,11 @@ pub fn generate_image(file : File)->Option<Image>{
             let mut idx = 0;
             let ptr = content.get_addr();
             let skip = (4 - (width * bmp.bitcnt as usize) % 4) % 4;
-            // println!("file size {}KB, skip {} per line, size of color {}",
-            //     file.size / 1024, skip, size_of::<BMPColor>());
+            // println!("file size {}KB, skip {} per line, size of color {} data offset {}",
+            //     file.size / 1024, skip, size_of::<BMPColor>(), data_offset);
             for _ in 0..height{
                 for _ in 0..width{
                     let color = *(ptr.add(data_offset) as *mut BMPColor);
-                    // println!("bmp idx {}", idx);
                     rt.set(idx, Pixel{r:color.r,g:color.g,b:color.b,a:color.a});
                     idx += 1;
                     data_offset += 4;
@@ -74,7 +73,7 @@ pub fn generate_image(file : File)->Option<Image>{
     }
 }
 #[repr(packed)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct BMPColor{
     b:u8,
     g:u8,

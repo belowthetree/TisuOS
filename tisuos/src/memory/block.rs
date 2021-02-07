@@ -57,10 +57,12 @@ impl<T1:Copy> Block<T1> {
     pub fn copy_from<T2:Copy>(&self, st1 : usize, other : &Block<T2>, st2 : usize, len : usize) {
         assert!(st1 < self.size && st2 < other.size);
         unsafe {
-            let ptr2 = other.addr.add(st1) as *mut u8;
-            let ptr1 = self.addr.add(st2) as *mut u8;
+            let ptr1 = self.addr.add(st1) as *mut u8;
+            let ptr2 = other.addr.add(st2) as *mut u8;
             let count = min((self.size - st1) * size_of::<T1>(), (other.size - st2) * size_of::<T2>());
             let count = min(len * size_of::<T2>(), count);
+            // println!("ptr1 {:x}, ptr2 {:x}, size1 {}, size2 {}, len {}", ptr1 as usize, ptr2 as usize,
+                // self.size, other.size, count);
             ptr1.copy_from(ptr2, count);
         }
     }
@@ -83,6 +85,6 @@ impl<T> Drop for Block<T>{
     }
 }
 
-use crate::uart;
+// use crate::uart;
 use core::{cmp::min, mem::size_of};
 use super::allocator::{alloc, free};

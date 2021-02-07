@@ -43,15 +43,20 @@ impl Environment {
         }
         self.satp = env.satp;
         self.epc = env.epc;
+        self.hartid = env.hartid;
     }
 }
 
 pub static mut ENVS : [Environment;4] = [Environment::new();4];
+static mut LOCKER : Mutex = Mutex::new();
 
 pub fn init(hartid : usize){
     unsafe {
+        LOCKER.lock();
         let ad = (&mut ENVS[hartid] as *mut Environment) as usize;
+        println!("hartid {} mscratch {:x}", hartid, ad);
         cpu::write_mscratch(ad);
+        LOCKER.unlock();
     }
 }
 
@@ -107,6 +112,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
             }
             8 | 9 | 11 => {
                 env.regs[Register::A0.val()] = syscall::handler(env);
+                println!("syscall rt {}", env.regs[Register::A0.val()]);
                 // env.epc = pc + 4;
                 pc += 4;
                 // thread::schedule(env);
@@ -157,7 +163,8 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                     ptr.add(2).write_volatile(1);
                     ptr.add(3).write_volatile(1);
                 }
-                // thread::schedule(env);
+                thread::schedule(env);
+                pc = waiting as usize;
             },
             11 => {
                 plic::handler();
@@ -174,7 +181,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
 
 use thread::delete_current_thread;
 
-use crate::{memory::{KERNEL_STACK_END, KERNEL_STACK_START}, task::{thread}};
+use crate::{memory::{KERNEL_STACK_END, KERNEL_STACK_START}, sync::Mutex, task::{thread}};
 
 use crate::{plic, uart, cpu};
 use super::{syscall, timer};

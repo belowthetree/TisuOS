@@ -16,7 +16,32 @@ pub struct Directory{
 
 // #[allow(dead_code)]
 impl Directory {
-    pub fn new(name : String, items : Vec::<DirItem>, st_cluster : usize, block_idx : usize) ->Self {
+    pub fn open(path : &String)->Option<Self> {
+        let s : Vec<&str> = path.split('/').collect();
+        
+        let block_idx = s.first().unwrap();
+        let block_idx = convert_to_usize(&block_idx.to_string());
+        if let Some(root) = get_directory(block_idx as usize, 2) {
+            let mut tree = root;
+            for (idx, dir) in s.iter().enumerate() {
+                if idx == 0 || dir.len() <= 0 {
+                    continue;
+                }
+                if let Some(t) = tree.get_sub_directory(&dir.to_string()) {
+                    tree = t;
+                }
+                else {
+                    return None;
+                }
+            }
+            Some(tree)
+        }
+        else{
+            println!("no root");
+            None
+        }
+    }
+    pub fn new(name : String, items : Vec::<DirItem>, st_cluster : usize, block_idx : usize)->Self {
         Directory {
             name : name,
             items : items,
@@ -161,7 +186,7 @@ pub fn get_directory(block_idx : usize, cluster : usize) ->Option<Directory> {
 }
 
 use alloc::{prelude::v1::*};
-use crate::{filesystem::{Mgr, interface::get_mgr, require::{DoDirectory}}, libs::str::make_shortname, uart};
+use crate::{filesystem::{Mgr, interface::get_mgr, require::{DoDirectory}}, libs::str::{convert_to_usize, make_shortname}, uart};
 use super::{file::{File}, super::{fat32::Attribute}};
 
 

@@ -96,6 +96,7 @@ impl BlockDevice {
 		if !self.int.get() {
 			return;
 		}
+		
 		unsafe{
 			let queue = &*self.queue;
 			while self.used_idx as u16 != queue.used.idx {
@@ -248,7 +249,7 @@ pub fn interrupt_handler(pin_num : usize){
 			for b in block{
 				if b.pin_idx == pin_num{
 					// b.interrupt_handler();
-					b.int.set();
+					b.int.set_true();
 					break;
 				}
 			}

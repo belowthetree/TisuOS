@@ -53,6 +53,7 @@ _start:
 	li		t3, (1 << 3)
 	csrw	mie, t3
 	
+	csrr	a0, mhartid
 	la		t1, kernel_start
 	csrw	mepc, t1
 	

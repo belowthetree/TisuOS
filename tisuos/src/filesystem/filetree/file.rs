@@ -196,10 +196,8 @@ impl File {
         let block_idx = s.first().unwrap();
         let block_idx = convert_to_usize(&block_idx.to_string());
         if let Some(root) = get_directory(block_idx as usize, 2) {
-            println!("get root");
             let mut tree = root;
             for (idx, dir) in s.iter().enumerate() {
-                println!("get dir {}", dir);
                 if idx == 0 || idx == s.len() - 1{
                     continue;
                 }

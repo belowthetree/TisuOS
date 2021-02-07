@@ -4,7 +4,7 @@
 
 #![allow(dead_code)]
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Pixel {
 	pub r: u8,
@@ -14,6 +14,14 @@ pub struct Pixel {
 }
 
 impl Pixel{
+    pub fn new(r:u8, g:u8, b:u8, a:u8)->Self {
+        Self {
+            r : r,
+            g : g,
+            b : b,
+            a : a,
+        }
+    }
     pub const fn red()->Self{
         Pixel{
             r:255,

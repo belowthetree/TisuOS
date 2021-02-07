@@ -12,12 +12,13 @@ extern "C" {
     fn thread_exit();
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum ThreadState{
     Running,
     Waiting,
     Sleeping,
 }
+
 
 /// ## 线程
 /// 不保存堆信息，pid 记录所属进程号
@@ -82,7 +83,8 @@ impl Thread {
             is_kernel : p.is_kernel,
         })
     }
-    pub fn copy(src_env : &Environment, thread : &Thread)->Option<Self>{
+    pub fn copy(src_env : &Environment)->Option<Self>{
+        let thread = get_current_thread(src_env.hartid).unwrap();
         let mut env = src_env.clone();
         let stack_bottom;
         let tid = unsafe{ THREAD_CNT };
@@ -119,8 +121,9 @@ impl Thread {
         stack_top = stack_bottom as usize + PAGE_SIZE * STACK_PAGE_NUM;
         env.epc = src_env.epc + 4;
         env.regs[Register::SP.val()] = stack_top - (thread.stack_top as usize - src_env.regs[Register::SP.val()]);
-        println!("thread copy src stack {:x} sp {:x}, new stack {:x} sp {:x}", thread.stack_top as usize,
-            src_env.regs[Register::SP.val()], stack_top, env.regs[Register::SP.val()]);
+        println!("thread copy src tid {} stack {:x} sp {:x}, new stack {:x} sp {:x} tid {}", thread.tid,
+            thread.stack_top as usize, src_env.regs[Register::SP.val()], stack_top,
+            env.regs[Register::SP.val()], tid);
         env.regs[Register::A0.val()] = tid;
         unsafe {
             THREAD_CNT = THREAD_CNT + 1;
@@ -151,6 +154,7 @@ static mut THREAD_CNT : usize = 1;
 static mut THREAD_LOCK : Mutex = Mutex::new();
 static mut THREAD_LIST : Option<Vec<Thread>> = None;
 static mut ENVIRONMENT : [*mut Environment;4] = [null_mut();4];
+static mut RECORD : [usize;4] = [0;4];
 
 /// ## 初始化临时环境内存
 pub fn init(){
@@ -159,6 +163,15 @@ pub fn init(){
         for i in 0..4{
             ENVIRONMENT[i] = alloc(size_of::<Environment>(), true).unwrap() as *mut Environment;
         }
+    }
+}
+
+pub fn list() {
+    unsafe {
+        for tid in RECORD.iter() {
+            print!("{} ", tid);
+        }
+        println!();
     }
 }
 
@@ -181,11 +194,11 @@ pub fn create_thread<'a>(func : usize, p : &Process)->Option<&'a mut Thread>{
 
 /// ## 根据已有的线程创建分支
 /// 执行地址根据传入的环境而定，用于系统调用
-pub fn fork(env : &Environment, thread : &Thread){
+pub fn fork(env : &Environment){
     unsafe {
         THREAD_LOCK.lock();
         if let Some(list) = &mut THREAD_LIST{
-            if let Some(t) = Thread::copy(env, thread){
+            if let Some(t) = Thread::copy(env){
                 list.push(t);
             }
         }
@@ -211,7 +224,6 @@ pub fn wake_up(tid : usize){
 /// ## 调度函数
 pub fn schedule(env : &Environment){
     save_current(env);
-    sleep_current(env.hartid);
     switch_next(env.hartid);
 }
 
@@ -231,13 +243,14 @@ pub fn delete_current_thread(hartid : usize){
     }
 }
 
-pub fn run(tid : usize){
+pub fn run(tid : usize, hartid : usize){
     unsafe {
         THREAD_LOCK.lock();
         if let Some(list) = &mut THREAD_LIST{
             for t in list{
                 if t.tid == tid{
                     t.state = ThreadState::Running;
+                    t.env.hartid = hartid;
                     break;
                 }
             }
@@ -293,9 +306,11 @@ pub fn save_current(env : &Environment){
     }
 }
 
-pub fn sleep_current(hartid : usize){
+pub fn switch_next(hartid : usize){
     unsafe {
         THREAD_LOCK.lock();
+        let mut is_kernel = false;
+        let mut sche = false;
         if let Some(threads) = &mut THREAD_LIST{
             for (idx, t) in threads.iter_mut().enumerate(){
                 if t.state == ThreadState::Running && t.env.hartid == hartid {
@@ -304,49 +319,60 @@ pub fn sleep_current(hartid : usize){
                     break;
                 }
             }
-        }
-        THREAD_LOCK.unlock();
-    }
-}
-
-pub fn switch_next(hartid : usize){
-    unsafe {
-        THREAD_LOCK.lock();
-        if let Some(threads) = &mut THREAD_LIST{
-            for t in threads{
+            for t in threads.iter_mut(){
                 if t.state == ThreadState::Waiting {
                     t.state = ThreadState::Running;
                     t.env.hartid = hartid;
-                    // println!("run in hartid {}", hartid);
+                    // println!("thread {} run in hartid {}", t.tid, hartid);
                     (*ENVIRONMENT[hartid]).copy(&t.env);
-                    let is_kernel = t.is_kernel;
-                    THREAD_LOCK.unlock();
-                    if is_kernel{
-                        switch_kernel_process(ENVIRONMENT[hartid] as *mut u8);
-                    }
-                    else{
-                        switch_user_process(ENVIRONMENT[hartid] as *mut u8);
-                    }
+                    is_kernel = t.is_kernel;
+                    sche = true;
+                    RECORD[hartid] = t.tid;
+                    break;
                 }
             }
         }
         THREAD_LOCK.unlock();
+        if !sche {
+            return;
+        }
+        if is_kernel{
+            switch_kernel_process(ENVIRONMENT[hartid] as *mut u8);
+        }
+        else{
+            switch_user_process(ENVIRONMENT[hartid] as *mut u8);
+        }
     }
 }
 
-pub fn get_current_thread<'a>(hartid : usize)->Option<&'a Thread>{
+fn get_current_thread(hartid : usize)->Option<Info>{
     unsafe {
-        THREAD_LOCK.lock();
         if let Some(threads) = &mut THREAD_LIST{
             for t in threads{
+                println!("{} thread {}, state {:?}, hartid {}", hartid, t.tid, t.state, t.env.hartid);
                 if t.state == ThreadState::Running && t.env.hartid == hartid{
-                    THREAD_LOCK.unlock();
-                    return Some(t);
+                    return Some(Info::from_thread(t));
+                }
+            }
+        }
+        None
+    }
+}
+
+pub fn get_current_thread_pid(hartid : usize)->Option<usize> {
+    unsafe {
+        THREAD_LOCK.lock();
+        let mut rt = None;
+        if let Some(threads) = &mut THREAD_LIST{
+            for t in threads{
+                println!("{} thread {}, state {:?}, hartid {}", hartid, t.tid, t.state, t.env.hartid);
+                if t.state == ThreadState::Running && t.env.hartid == hartid{
+                    rt = Some(t.pid);
                 }
             }
         }
         THREAD_LOCK.unlock();
-        None
+        rt
     }
 }
 
@@ -370,7 +396,7 @@ use alloc::{prelude::v1::*};
 
 use crate::{uart, interrupt::trap::{Environment, Register}, memory::{allocator::alloc, page, page_table::{SATP}}, sync::Mutex};
 
-use super::process::{self, Process, STACK_PAGE_NUM, drop_thread};
+use super::{info::Info, process::{self, Process, STACK_PAGE_NUM, drop_thread}};
 
 
 

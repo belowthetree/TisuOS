@@ -362,7 +362,7 @@ pub fn pending(pin : usize) {
         if let Some(gpu) = &mut DEVICE{
             for dev in gpu{
                 if dev.device_idx == pin{
-                    dev.int.set();
+                    dev.int.set_true();
                 }
             }
         }

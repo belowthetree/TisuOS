@@ -29,8 +29,7 @@ pub fn handler(env : &Environment) -> usize {
             }
         }
         57 => {
-            let t = get_current_thread(env.hartid).unwrap();
-            fork(env, t);
+            fork(env);
             rt = 0;
         }
         60 => {
@@ -48,8 +47,8 @@ pub fn handler(env : &Environment) -> usize {
     rt
 }
 
-fn fork(env : &Environment, thread : &Thread){
-    thread::fork(env, thread);
+fn fork(env : &Environment){
+    thread::fork(env);
 }
 #[allow(dead_code)]
 fn branch(func : usize, pid : usize)->Result<(), ()>{
@@ -64,9 +63,8 @@ fn exec(func : usize, satp : usize, is_kernel : bool){
 }
 
 use process::{add_process, get_process_by_pid};
-use thread::{Thread};
 
-use crate::{memory::allocator, task::{process::{Process, self}, thread::{self, get_current_thread}}};
+use crate::{memory::allocator, task::{process::{Process, self}, thread::{self}}};
 use crate::uart;
 
 use super::trap::{Environment, Register};

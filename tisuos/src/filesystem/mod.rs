@@ -3,9 +3,9 @@
 //! 2021年1月29日 zg
 
 pub mod filetree;
-pub mod interface;
 pub mod elf;
 pub mod image;
+mod interface;
 mod format;
 mod block_info;
 mod require;
@@ -41,6 +41,7 @@ pub fn init(){
         }
         MANAGER = Some(infos);
         file::init();
+        image::image::init();
     }
 }
 

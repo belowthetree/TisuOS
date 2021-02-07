@@ -80,6 +80,17 @@ impl ColorBlock {
 
         draw_rect_override(GPU_DEVICE, rect, self.buffer.get_addr());
     }
+    /// ### 结合透明度绘制全部区域
+    pub fn draw_blend(&self) {
+        let rect = Rect {
+            x1 : self.x as u32,
+            y1 : self.y as u32,
+            x2 : (self.x + self.width) as u32,
+            y2 : (self.y + self.height) as u32,
+        };
+
+        draw_rect_blend(GPU_DEVICE, rect, self.buffer.get_addr());
+    }
     /// ### 写字
     pub fn fill_font(&self, c : char, x : usize, y : usize, height : usize, width : usize,
             foreground : Pixel, background : Pixel) {
@@ -112,10 +123,31 @@ impl ColorBlock {
             row += 1;
         }
     }
+    pub fn translate(&mut self, vec : Vector) {
+        self.x = max(0, self.x as isize + vec.x) as usize;
+        self.y = max(0, self.y as isize + vec.y) as usize;
+    }
+}
+
+impl ColorBlock {
+    pub fn resize(&mut self, width : usize, height : usize) {
+        let bak = Block::<Pixel>::new(width * height);
+        for y in 0..height {
+            let t1 = y * width;
+            let t2 = y * self.height / height * self.width;
+            for x in 0..width {
+                let t = x * self.width / width;
+                bak.set(x + t1, self.buffer.get(t + t2).unwrap(), 1);
+            }
+        }
+        self.buffer = bak;
+        self.width = width;
+        self.height = height;
+    }
 }
 
 
-use core::cmp::min;
-use crate::{filesystem::image::{image::Image}, libs::{font::{FONT_ASCII, FONT_HEIGHT, FONT_WIDTH}, graphic::Pixel, shape::{Rect}}, memory::block::Block, virtio::gpu_device::{draw_rect_override}};
+use core::cmp::{max, min};
+use crate::{filesystem::image::{image::Image}, libs::{font::{FONT_ASCII, FONT_HEIGHT, FONT_WIDTH}, graphic::Pixel, shape::{Rect, Vector}}, memory::block::Block, virtio::gpu_device::{draw_rect_blend, draw_rect_override}};
 
 

@@ -89,8 +89,8 @@ impl ConsoleShell {
             match s[0] {
                 "draw" => {
                     {
-                        let mut color = Grid::new(0, 0, 
-                            100, 100, 20, 20);
+                        let color = Pixel::black();
+                        let mut color = Grid::solid_color(0, 0, 100, 100, 20, 20, color);
                         let mut i = 0;
                         for c in 'a' as u8..='z' as u8 {
                             color.fill_font(i, c as char, Pixel::white(), Pixel::black());
@@ -139,6 +139,7 @@ impl ConsoleShell {
                 }
                 "lsp" => {
                     list_thread();
+                    list();
                 }
                 "lsm" => {
                     unsafe {
@@ -197,4 +198,4 @@ fn output(c : u8){
 use super::console_input::pop;
 use alloc::prelude::v1::*;
 use crate::{filesystem::{elf::load_elf, filetree::{directory::{Directory, get_directory}, file::{File, OpenFlag}}, image::bmp::generate_image}, graphic::{canvas::grid::Grid, colorblock::ColorBlock}, libs::{graphic::Pixel,
-        str::convert_to_usize, syscall::{list_thread}}, memory::allocator, uart, virtio::gpu_device::invalid};
+        str::convert_to_usize, syscall::{list_thread}}, memory::allocator, task::thread::list, uart, virtio::gpu_device::invalid};

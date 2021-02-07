@@ -8,6 +8,7 @@
     alloc_prelude,
     untagged_unions,
     core_intrinsics,
+    const_fn,
 )]
 
 #[macro_use]

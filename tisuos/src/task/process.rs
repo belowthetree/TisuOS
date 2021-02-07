@@ -4,7 +4,7 @@
 //! 2020年12月12日 zg
 
 use alloc::{prelude::v1::*};
-use thread::{create_thread, delete, get_current_thread, get_thread_by_id, run};
+use thread::{create_thread, delete, get_current_thread_pid, get_thread_by_id, run};
 use virtio::device;
 
 extern "C" {
@@ -193,8 +193,9 @@ pub fn start_init_process(){
     unsafe {
         if let Some(p) = Process::new(init_process as usize, true) {
             if let Some(list) = &mut PROCESS_LIST{
-                (*TMP_ENV[0]).copy(&p.first_thread().env);
-                run(*p.tid.first().unwrap());
+                let t = p.first_thread();
+                run(*p.tid.first().unwrap(), 0);
+                (*TMP_ENV[0]).copy(&t.env);
                 list.push_front(p);
                 switch_kernel_process(TMP_ENV[0] as *mut u8);
             }
@@ -268,7 +269,7 @@ pub fn delete_current_process(hartid : usize){
     unsafe {
         PROCESS_LIST_LOCK.lock();
         if let Some(list) = &mut PROCESS_LIST{
-            let pid = get_current_thread(hartid).unwrap().pid;
+            let pid = get_current_thread_pid(hartid).unwrap();
             for (idx, p) in list.iter().enumerate(){
                 if p.pid == pid {
                     for tid in p.tid.iter(){
@@ -314,17 +315,19 @@ pub fn init_process(){
     virtio::init();
     filesystem::init();
     gpu_device::reset(0);
-    if fork() != 0 {
-        println!("fork shell");
+    let rt = fork();
+    if rt != 0 {
+        println!("fork shell rt {}", rt);
         console_shell::run();
+    }
+    if fork() != 0 {
+        let mut desk = Plane::new();
+        desk.run();
     }
     // if fork() != 0{
     //     buffer::write_down_handler();
     // }
-    // Desktop::new();
-    // if fork() != 0 {
-    //     desktop::run();
-    // }
+    
     unsafe {
         loop {
             asm!("wfi"::::"volatile");
@@ -333,7 +336,7 @@ pub fn init_process(){
 }
 
 extern crate alloc;
-use crate::{filesystem, interact::console_shell, interrupt::timer, libs::syscall::{fork, list_thread}, memory::{allocator, user_allocator::MemoryList}, sync::Mutex, virtio::{self, gpu_device}};
+use crate::{desktop::plane::Plane, filesystem, interact::console_shell, interrupt::timer, libs::syscall::{fork}, memory::{allocator, user_allocator::MemoryList}, sync::Mutex, virtio::{self, gpu_device}};
 // use syscall::fork;
 use core::{mem::size_of, ptr::null_mut};
 use alloc::{collections::VecDeque};
