@@ -1,5 +1,9 @@
 # 太素 TisuOS
 
+太素OS是一个用 Rust 编写的基于 RISCV 架构的操作系统，主要用于教学目的，为初学者提供参考。
+
+Tisu OS is a RISCV-based operating system written in Rust and designed primarily for educational purposes and as a reference for beginners.
+
 ![](图/系统截图.jpg)
 
 gitee 地址：https://gitee.com/belowthetree/tisu-os （包含硬盘镜像，最新推送）
@@ -26,6 +30,10 @@ github 地址：https://github.com/belowthetree/TisuOS （纯源码版本，删�
 
 * 基础教程部分，为 os-tutorial
 * 扩展部分 tisuos，重构的代码
+
+基础教程部分有一些 BUG，不过并不影响大部分情况下的运行，扩展重构部分修复了一些 BUG 并且优化了整个系统的结构。如果你想使用本系统的源码，推荐使用扩展部分，即 `tisuos/` 目录下的源码。
+
+There are a few bugs in the tutorial section `os-tutorial/`, but they can work in most cases, and the extended section fixes some bugs and optimizes the overall structure of the system. If you want to use the source code of this system, it is recommended to use the extended section, which is the source code in the `tisuos/` directory.
 
 ## 教程部分
 
