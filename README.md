@@ -14,7 +14,7 @@ Tisu OS is a RISCV-based operating system written in Rust and designed primarily
 
 gitee 地址：https://gitee.com/belowthetree/tisu-os （包含硬盘镜像，最新推送）
 
-github 地址：https://github.com/belowthetree/TisuOS （纯源码版本，删除了镜像、target 文件夹）
+github 地址：https://github.com/belowthetree/TisuOS （纯源码版本，删除了镜像、target 文件夹，如需运行，请到gitee下载磁盘镜像或者自行新建一个名为hd.dsk的镜像）
 
 ## 编译
 
