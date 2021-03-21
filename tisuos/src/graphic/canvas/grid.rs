@@ -86,6 +86,7 @@ impl Grid {
 }
 
 /// ## 绘制
+#[allow(dead_code)]
 impl Grid {
     /// ### 直接覆盖到显示缓冲区
     pub fn draw_override(&mut self) {
@@ -234,6 +235,6 @@ use core::cmp::min;
 
 use crate::{filesystem::image::image::Image, graphic::colorblock::ColorBlock, libs::{font::{FONT_ASCII, FONT_HEIGHT, FONT_WIDTH}, graphic::Pixel, shape::{Position, Vector}}, memory::block::Block};
 
-use super::{require::GridBlock, texblock::{self, TexBlock}};
-use crate::uart;
+use super::{require::GridBlock};
+// use crate::uart;
 

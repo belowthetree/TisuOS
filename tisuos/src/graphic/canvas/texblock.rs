@@ -81,7 +81,7 @@ impl GridBlock for TexBlock {
 }
 
 use core::cmp::min;
-use crate::{libs::font::{FONT_ASCII, FONT_HEIGHT, FONT_WIDTH}, uart};
+use crate::{libs::font::{FONT_ASCII, FONT_HEIGHT, FONT_WIDTH}};
 use crate::{filesystem::image::{image::Image}, libs::graphic::Pixel, memory::block::Block};
 
 use super::require::GridBlock;

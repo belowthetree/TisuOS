@@ -7,7 +7,7 @@ use core::cmp::min;
 use crate::{memory::{block::Block}, sync::{ReadWriteMutex}};
 
 const BUFFER_SIZE : usize = 1024 * 4096; // 4 MB
-const CACHE_SIZE : usize = 2;
+const CACHE_SIZE : usize = 4;
 static mut LOCK : ReadWriteMutex = ReadWriteMutex::new();
 static mut COUNTER : usize = 1;
 static mut CACHE : Option<Vec<Buffer>> = None;

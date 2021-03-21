@@ -129,9 +129,6 @@ impl Mouse {
     pub fn get_current_position(&self)->Position {
         Position::from_scale_point(self.cur_pos)
     }
-    pub fn get_pre_position(&self)->Position {
-        Position::from_scale_point(self.pre_pos)
-    }
     pub fn scroll(&mut self, val : u16){
         if val == 1 {
             self.add_event(MouseEvent::new(MouseEventType::ScrollUp, MouseEventInfo::None))

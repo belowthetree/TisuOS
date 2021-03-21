@@ -90,9 +90,6 @@ impl Content {
                     self.directory = dir;
                 }
             }
-            ShellEvent::Output(s) => {
-                self.write_string(&s, FONT_COLOR);
-            }
             ShellEvent::List => {
                 let mut items = Vec::<DirItem>::new();
                 for file in self.directory.items.iter() {
@@ -184,7 +181,7 @@ use core::cmp::min;
 use crate::{filesystem::{filetree::directory::{DirItem, Directory}, image::image::Image}, graphic::canvas::texblock::TexBlock, interact::intershell::{InterShell, ShellEvent}, libs::shape::Position};
 use alloc::prelude::v1::*;
 use crate::{graphic::canvas::{grid::Grid}, libs::{font::{FONT_HEIGHT, FONT_WIDTH}, graphic::Pixel, shape::{Vector}}};
-use crate::uart;
+// use crate::uart;
 
-use super::{keyboard::KeyboardEvent, mouse::MouseEvent};
+use super::{mouse::MouseEvent};
 

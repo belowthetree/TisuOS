@@ -6,7 +6,6 @@
 
 pub enum ShellEvent {
     SwitchDirectory(String),
-    Output(String),
     List,
     SwitchDisk(usize),
     Exec(String),
@@ -16,7 +15,6 @@ pub enum ShellEvent {
 /// 专门给图形界面的命令行用，功能类似，不过主要做一个命令处理工具
 pub struct InterShell{
     input_list : String,
-    output_list : Vec<ColorChar>,
 }
 
 impl InterShell {
@@ -24,7 +22,6 @@ impl InterShell {
         println!("inter shell new");
         Self{
             input_list : String::new(),
-            output_list : Vec::<ColorChar>::new(),
         }
     }
     pub fn input(&mut self, c : char)->Option<ShellEvent> {
@@ -83,26 +80,8 @@ impl InterShell {
         }
         rt
     }
-    pub fn add_output(&mut self, s : &mut Vec<ColorChar>){
-        self.output_list.append(s);
-    }
-    pub fn output(&mut self, s : &String, color : Pixel){
-        for c in s.bytes() {
-            self.output_list.push(ColorChar{color : color, c : c as char});
-        }
-    }
-    pub fn pop_output(&mut self)->Vec<ColorChar>{
-        let rt = self.output_list.clone();
-        self.output_list.clear();
-        rt
-    }
-    fn make_color(&self, cs : &mut Vec<ColorChar>, s : &String, color : Pixel) {
-        for c in s.bytes() {
-            cs.push(ColorChar{c:c as char,color:color});
-        }
-    }
 }
 
 
 use alloc::prelude::v1::*;
-use crate::{libs::{graphic::{ColorChar, Pixel}, str::convert_to_usize, syscall::list_thread}, uart};
+use crate::{libs::{str::convert_to_usize, syscall::list_thread}, uart};

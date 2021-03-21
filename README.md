@@ -1,5 +1,11 @@
 # 太素 TisuOS
 
+
+
+**QQ交流群号：961871659**
+
+
+
 太素OS是一个用 Rust 编写的基于 RISCV 架构的操作系统，主要用于教学目的，为初学者提供参考。
 
 Tisu OS is a RISCV-based operating system written in Rust and designed primarily for educational purposes and as a reference for beginners.

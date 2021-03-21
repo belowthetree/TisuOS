@@ -94,8 +94,6 @@ impl CompressType{
 
 
 
-use core::mem::size_of;
-
 use crate::{filesystem::file::{File}, libs::{graphic::Pixel, str::from_u16}, uart};
 
 use super::image::{Format, Image};

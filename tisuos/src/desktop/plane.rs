@@ -237,7 +237,7 @@ use crate::{filesystem::{filetree::file::{File, OpenFlag}, image::bmp::generate_
     graphic::{colorblock::ColorBlock}, libs::shape::Position, sync::{Bool},
     virtio::{gpu_device::{HEIGHT, WIDTH, invalid}, input::{input_buffer::{get_key_press, get_key_release,
         get_mouse_position, get_scroll}, keyboard::Key}}};
-use alloc::{collections::VecDeque, prelude::v1::*};
+use alloc::{prelude::v1::*};
 use super::{content::ContentType, dock::{Dock, DockFuncType}, keyboard::{Keyboard}, mouse::{Mouse}, window::{Window}};
-use crate::uart;
+// use crate::uart;
 

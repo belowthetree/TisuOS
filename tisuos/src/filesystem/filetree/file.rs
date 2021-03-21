@@ -265,6 +265,11 @@ impl File {
             read_content(self.block_idx, self.start_cluster, idx, len)
         }
     }
+    pub fn write(&self, idx : usize, len : usize, ctx : &Block<u8>) {
+        if idx < self.size && self.is_write(){
+            write_content(self.block_idx, self.start_cluster, idx, len, ctx);
+        }
+    }
     pub fn is_open(&self)->bool{
         !self.is_close()
     }
@@ -294,7 +299,7 @@ impl OpenFlag{
 }
 
 
-use crate::{filesystem::interface::read_content, libs::str::convert_to_usize, memory::block::{Block}, sync::Mutex};
+use crate::{filesystem::interface::{read_content, write_content}, libs::str::convert_to_usize, memory::block::{Block}, sync::Mutex};
 use super::{super::{filetree::directory::DirItem}, directory::get_directory};
 use alloc::{prelude::v1::*};
-use crate::uart;
+// use crate::uart;

@@ -147,6 +147,7 @@ impl Drop for Thread{
         let stack_bottom = self.stack_top as usize - PAGE_SIZE * STACK_PAGE_NUM;
         free_page(stack_bottom as *mut u8);
         drop_thread(self.pid, self.tid);
+        delete_pipe(self.tid);
     }
 }
 
@@ -396,7 +397,7 @@ use alloc::{prelude::v1::*};
 
 use crate::{uart, interrupt::trap::{Environment, Register}, memory::{allocator::alloc, page, page_table::{SATP}}, sync::Mutex};
 
-use super::{info::Info, process::{self, Process, STACK_PAGE_NUM, drop_thread}};
+use super::{delete_pipe, info::Info, process::{self, Process, STACK_PAGE_NUM, drop_thread}};
 
 
 

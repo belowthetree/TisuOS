@@ -16,6 +16,16 @@ pub fn read_content(block_idx : usize, start_cluster : usize, idx : usize, len :
     }
 }
 
+pub fn write_content(block_idx : usize, start_cluster : usize, idx : usize, len : usize, ctx : &Block<u8>) {
+    if let Some(mgr) = get_mgr(block_idx){
+        match mgr {
+            Mgr::FAT(fat) => {
+                fat.write(block_idx, start_cluster, idx, len, ctx);
+            }
+        }
+    }
+}
+
 pub fn get_mgr<'a>(block_idx : usize) ->Option<&'a mut Mgr>{
     unsafe {
         if let Some(mgrs) = &mut MANAGER{

@@ -145,7 +145,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
             3 => {
                 // println!("Machine software interrupt CPU:{:016x}", hartid);
                 unsafe {
-                    let ptr = 0x2000000 as *mut u32;
+                    let ptr = 0x200_0000 as *mut u32;
                     ptr.add(hartid).write_volatile(0);
                 }
                 thread::schedule(env);
