@@ -14,7 +14,7 @@ Tisu OS is a RISCV-based operating system written in Rust and designed primarily
 
 gitee 地址：https://gitee.com/belowthetree/tisu-os （包含硬盘镜像，最新推送）
 
-github 地址：https://github.com/belowthetree/TisuOS （纯源码版本，删除了镜像、target 文件夹，如需运行，请到gitee下载磁盘镜像或者自行新建一个名为hd.dsk的镜像）
+github 地址：https://github.com/belowthetree/TisuOS （纯源码版本，删除了镜像、target 文件夹）
 
 ## 编译
 
@@ -25,6 +25,19 @@ github 地址：https://github.com/belowthetree/TisuOS （纯源码版本，删�
 * rust-nightly
 
 `make all`
+
+**另外，根据热心群友 wjl 提醒，可以不使用 gcc 进行编译**：
+
+将 `src/lib.rs` 改为 `src/main.rs`，去掉 Cargo.toml 中的 [lib] 属性，为 `src/main.rs` 中的 `feature` 添加 `global_asm` ，汇编文件以如下方式引用：
+
+```rust
+global_asm!(include_str!("asm/boot.S"));
+global_asm!(include_str!("asm/mem.S"));
+global_asm!(include_str!("asm/func.S"));
+global_asm!(include_str!("asm/trap.S"));
+```
+
+使用 `cargo build` 即可编译，生成的可执行文件在 `target\riscv64gc-unknown-none-elf\debug` 中，与项目同名且无后缀
 
 ## 运行：
 
