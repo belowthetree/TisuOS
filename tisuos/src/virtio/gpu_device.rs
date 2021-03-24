@@ -191,7 +191,6 @@ impl GPU {
     }
     fn add_ring(&mut self, head_idx : usize){
         unsafe {
-            //println!("head {}, avail {}", head_idx, (*self.queue).avail.idx);
             (*self.queue).avail.ring[(*self.queue).avail.idx as usize % VIRTIO_RING_SIZE] = head_idx as u16;
             (*self.queue).avail.idx = (*self.queue).avail.idx.wrapping_add(1);
         }

@@ -9,7 +9,10 @@ pub mod page;
 pub mod block;
 pub mod page_table;
 pub mod user_allocator;
+pub mod require;
 mod bitmap;
+
+
 
 pub fn init(){
     page::init();

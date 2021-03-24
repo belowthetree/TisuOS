@@ -4,17 +4,34 @@
 //! 
 //! 2021年1月1日 zg
 
+#![allow(dead_code)]
+
 pub mod process;
 pub mod thread;
+pub mod task_manager;
+pub mod scheduler;
+pub mod task_pool;
 mod info;
 
 static mut PIPE : Option<Vec<info::PipeUnit>> = None;
+pub static mut TASK_MANAGER : Option<TaskManager<Scheduler, TaskPool>> = None;
 
 pub fn init() {
     process::init();
     thread::init();
     unsafe {
+        TASK_MANAGER = Some(TaskManager::new(Scheduler::new(), TaskPool::new()));
         PIPE = Some(Vec::<info::PipeUnit>::new());
+    }
+}
+
+/// ## 任务操作接口
+/// 试用接口化
+pub fn schedule(hartid : usize){
+    unsafe {
+        if let Some(mgr) = &mut TASK_MANAGER {
+            mgr.schedule(hartid);
+        }
     }
 }
 
@@ -62,4 +79,4 @@ pub fn delete_pipe(tid : usize) {
 
 use alloc::prelude::v1::*;
 
-use self::info::PipeUnit;
+use self::{info::PipeUnit, scheduler::Scheduler, task_manager::{TaskManager, TaskPoolOp}, task_pool::TaskPool};

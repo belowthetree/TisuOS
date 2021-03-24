@@ -16,3 +16,8 @@ thread_exit:
 write_mscratch:
 	csrw	mscratch, a0
 	ret
+
+.global read_mhartid
+read_mhartid:
+	csrr	a0, mhartid
+	ret
