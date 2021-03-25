@@ -129,7 +129,11 @@ impl Mutex{
             }
         }
     }
-
+    pub fn sync<F>(&mut self, f : F) where F : Fn() {
+        self.lock();
+        f();
+        self.unlock();
+    }
 }
 
 impl ReadWriteMutex{

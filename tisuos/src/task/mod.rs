@@ -27,10 +27,10 @@ pub fn init() {
 
 /// ## 任务操作接口
 /// 试用接口化
-pub fn schedule(hartid : usize){
+pub fn schedule(env : &mut Environment, hartid : usize){
     unsafe {
         if let Some(mgr) = &mut TASK_MANAGER {
-            mgr.schedule(hartid);
+            mgr.schedule(env, hartid);
         }
     }
 }
@@ -78,5 +78,7 @@ pub fn delete_pipe(tid : usize) {
 }
 
 use alloc::prelude::v1::*;
+
+use crate::interrupt::trap::Environment;
 
 use self::{info::PipeUnit, scheduler::Scheduler, task_manager::{TaskManager, TaskPoolOp}, task_pool::TaskPool};

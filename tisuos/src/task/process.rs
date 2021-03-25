@@ -21,6 +21,14 @@ pub enum ProcessState{
     Scheduling = 1,
     Sleeping = 3,
 }
+impl ProcessState {
+    pub fn to_task_state(&self)->TaskState {
+        match self {
+            ProcessState::Scheduling => {TaskState::Running}
+            ProcessState::Sleeping => {TaskState::Sleeping}
+        }
+    }
+}
 impl PartialEq for ProcessState{
     fn eq(&self, other: &Self) -> bool {
         (self.clone() as usize) == (*other as usize)
@@ -155,6 +163,9 @@ impl Process {
     }
     pub fn first_thread<'a>(&self)->&'a mut Thread{
         get_thread_by_id(self.tid[0]).unwrap()
+    }
+    pub fn get_prog_info(&self)->ProgramInfo {
+        ProgramInfo::from_program(self)
     }
 }
 /// 进程的释放发生在被从调度队列中剔除
@@ -343,4 +354,4 @@ use alloc::{collections::VecDeque};
 use page_table::{SATP};
 use crate::{interrupt::trap::{Environment, Register},memory::page_table, uart, };
 
-use super::thread::{self, Thread};
+use super::{info::ProgramInfo, task_manager::TaskState, thread::{self, Thread}};

@@ -4,24 +4,67 @@
 
 use crate::{interrupt::trap::Environment, sync::Mutex};
 use alloc::{collections::VecDeque};
-use super::thread::Thread;
+use super::{process::Process, task_manager::TaskState, thread::Thread};
 
-pub struct Info {
+pub struct ExecutionInfo {
     pub pid : usize,
     pub tid : usize,
+    pub state : TaskState,
     pub is_kernel : bool,
     pub stack_top : *mut u8,
     pub env : Environment,
 }
 
-impl Info {
+pub struct ProgramInfo {
+    pub pid : usize,
+    pub state : TaskState,
+    pub is_kernel : bool,
+}
+
+impl ExecutionInfo {
+    pub fn default()->Self {
+        Self {
+            pid: 0,
+            tid: 0,
+            state: TaskState::Waiting,
+            is_kernel: false,
+            stack_top: 0 as *mut u8,
+            env: Environment::new(),
+        }
+    }
+    
     pub fn from_thread(thread : &Thread)->Self {
         Self {
             pid : thread.pid,
             tid : thread.tid,
+            state : thread.state.to_task_state(),
             is_kernel : thread.is_kernel,
             stack_top : thread.stack_top,
             env : thread.env,
+        }
+    }
+
+    pub fn from_env(env : &Environment)->Self {
+        let mut rt = Self::default();
+        rt.env = *env;
+        rt
+    }
+}
+
+impl ProgramInfo {
+    pub fn default()->Self {
+        Self {
+            pid: 0,
+            state: TaskState::Waiting,
+            is_kernel: false,
+        }
+    }
+    
+    pub fn from_program(process : &Process)->Self {
+        Self {
+            pid : process.pid,
+            state : process.state.to_task_state(),
+            is_kernel : process.is_kernel,
         }
     }
 }

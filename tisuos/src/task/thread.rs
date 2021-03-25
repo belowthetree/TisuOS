@@ -7,8 +7,8 @@
 #![allow(dead_code)]
 
 extern "C" {
-    fn switch_user_process(env : *mut u8) -> usize;
-    fn switch_kernel_process(env : *mut u8) -> usize;
+    pub fn switch_user_process(env : *mut u8) -> usize;
+    pub fn switch_kernel_process(env : *mut u8) -> usize;
     fn thread_exit();
 }
 
@@ -19,6 +19,15 @@ pub enum ThreadState{
     Sleeping,
 }
 
+impl ThreadState {
+    pub fn to_task_state(&self)->TaskState {
+        match self {
+            ThreadState::Running => {TaskState::Running}
+            ThreadState::Waiting => {TaskState::Waiting}
+            ThreadState::Sleeping => {TaskState::Sleeping}
+        }
+    }
+}
 
 /// ## 线程
 /// 不保存堆信息，pid 记录所属进程号
@@ -140,6 +149,13 @@ impl Thread {
             is_kernel : thread.is_kernel,
         })
     }
+    pub fn get_exec_info(&self)->ExecutionInfo {
+        ExecutionInfo::from_thread(self)
+    }
+    pub fn set_exec_info(&mut self, info : &ExecutionInfo) {
+        self.env = info.env;
+    }
+
 }
 
 impl Drop for Thread{
@@ -346,13 +362,13 @@ pub fn switch_next(hartid : usize){
     }
 }
 
-fn get_current_thread(hartid : usize)->Option<Info>{
+fn get_current_thread(hartid : usize)->Option<ExecutionInfo>{
     unsafe {
         if let Some(threads) = &mut THREAD_LIST{
             for t in threads{
                 println!("{} thread {}, state {:?}, hartid {}", hartid, t.tid, t.state, t.env.hartid);
                 if t.state == ThreadState::Running && t.env.hartid == hartid{
-                    return Some(Info::from_thread(t));
+                    return Some(ExecutionInfo::from_thread(t));
                 }
             }
         }
@@ -397,7 +413,7 @@ use alloc::{prelude::v1::*};
 
 use crate::{uart, interrupt::trap::{Environment, Register}, memory::{allocator::alloc, page, page_table::{SATP}}, sync::Mutex};
 
-use super::{delete_pipe, info::Info, process::{self, Process, STACK_PAGE_NUM, drop_thread}};
+use super::{delete_pipe, info::{ExecutionInfo, ProgramInfo}, process::{self, Process, STACK_PAGE_NUM, drop_thread}, task_manager::TaskState};
 
 
 
