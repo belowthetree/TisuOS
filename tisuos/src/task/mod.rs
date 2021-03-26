@@ -8,13 +8,13 @@
 
 pub mod process;
 pub mod thread;
-mod info;
+mod task_info;
 /// 下边三个模块还未添加到内核功能中
 pub mod task_manager;
 pub mod scheduler;
 pub mod task_pool;
 
-static mut PIPE : Option<Vec<info::PipeUnit>> = None;
+static mut PIPE : Option<Vec<task_info::PipeUnit>> = None;
 pub static mut TASK_MANAGER : Option<TaskManager<Scheduler, TaskPool>> = None;
 
 pub fn init() {
@@ -22,7 +22,7 @@ pub fn init() {
     thread::init();
     unsafe {
         TASK_MANAGER = Some(TaskManager::new(Scheduler::new(), TaskPool::new()));
-        PIPE = Some(Vec::<info::PipeUnit>::new());
+        PIPE = Some(Vec::<task_info::PipeUnit>::new());
     }
 }
 
@@ -82,6 +82,5 @@ pub fn delete_pipe(tid : usize) {
 
 use alloc::prelude::v1::*;
 
-use crate::interrupt::trap::Environment;
 
-use self::{info::PipeUnit, scheduler::Scheduler, task_manager::{TaskManager, TaskPoolOp}, task_pool::TaskPool};
+use self::{task_info::PipeUnit, scheduler::Scheduler, task_manager::{TaskManager}, task_pool::TaskPool};

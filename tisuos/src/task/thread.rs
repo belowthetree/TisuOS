@@ -27,6 +27,14 @@ impl ThreadState {
             ThreadState::Sleeping => {TaskState::Sleeping}
         }
     }
+
+    pub fn from_task_state(state : TaskState)->Self {
+        match state {
+            TaskState::Running => {Self::Running}
+            TaskState::Waiting => {Self::Waiting}
+            TaskState::Sleeping => {Self::Sleeping}
+        }
+    }
 }
 
 /// ## 线程
@@ -57,6 +65,7 @@ impl Thread {
         }
         let satp = SATP::from(p.satp);
         let pt = satp.get_page_table().unwrap();
+        page_table::map_kernel_area(&mut *pt, p.is_kernel);
         if p.is_kernel{
             for i in 0..STACK_PAGE_NUM{
                 let addr = stack_bottom as usize + i * PAGE_SIZE;
@@ -91,12 +100,13 @@ impl Thread {
             is_kernel : p.is_kernel,
         })
     }
-    pub fn copy(info : &ExecutionInfo)->Option<Self>{
-        let mut env = info.env;
+    
+    pub fn copy(src_th : &Thread)->Option<Self>{
+        let mut env = src_th.env;
         let stack_bottom;
         let tid = unsafe{ THREAD_CNT };
         let stack_top;
-        if info.is_kernel{
+        if src_th.is_kernel{
             stack_bottom = page::alloc_kernel_page(STACK_PAGE_NUM);
         }
         else{
@@ -105,10 +115,10 @@ impl Thread {
         if stack_bottom.is_null(){
             return None;
         }
-        let satp = SATP::from(info.env.satp);
+        let satp = SATP::from(src_th.env.satp);
         let pt = satp.get_page_table().unwrap();
         unsafe {
-            if info.is_kernel{
+            if src_th.is_kernel{
                 for i in 0..STACK_PAGE_NUM{
                     let addr = stack_bottom as usize + i * PAGE_SIZE;
                     pt.map_kernel_data(addr, addr);
@@ -121,15 +131,15 @@ impl Thread {
                 }
             }
             let stack_size = STACK_PAGE_NUM * PAGE_SIZE;
-            let src = (info.stack_top as usize - stack_size) as *mut u8;
+            let src = (src_th.stack_top as usize - stack_size) as *mut u8;
             stack_bottom.copy_from(src, stack_size);
         }
 
         stack_top = stack_bottom as usize + PAGE_SIZE * STACK_PAGE_NUM;
-        env.epc = info.env.epc + 4;
-        env.regs[Register::SP.val()] = stack_top - (info.stack_top as usize - info.env.regs[Register::SP.val()]);
-        println!("thread copy src tid {} stack {:x} sp {:x}, new stack {:x} sp {:x} tid {}", info.tid,
-            info.stack_top as usize, info.env.regs[Register::SP.val()], stack_top,
+        env.epc = src_th.env.epc + 4;
+        env.regs[Register::SP.val()] = stack_top - (src_th.stack_top as usize - src_th.env.regs[Register::SP.val()]);
+        println!("thread copy src tid {} stack {:x} sp {:x}, new stack {:x} sp {:x} tid {}",
+        src_th.tid, src_th.stack_top as usize, src_th.env.regs[Register::SP.val()], stack_top,
             env.regs[Register::SP.val()], tid);
         env.regs[Register::A0.val()] = tid;
         unsafe {
@@ -142,18 +152,27 @@ impl Thread {
             env : env,
             state : ThreadState::Waiting,
             stack_top : stack_top as *mut u8,
-            pid : info.pid,
+            pid : src_th.pid,
             tid : tid,
-            is_kernel : info.is_kernel,
+            is_kernel : src_th.is_kernel,
         })
     }
+    
     pub fn get_exec_info(&self)->ExecutionInfo {
         ExecutionInfo::from_thread(self)
     }
+    
     pub fn set_exec_info(&mut self, info : &ExecutionInfo) {
+        self.state = ThreadState::from_task_state(info.state);
+        self.stack_top = info.stack_top;
+        self.pid = info.pid;
+        self.tid = info.tid;
         self.env = info.env;
     }
 
+    pub fn save(&mut self, env : &Environment) {
+        self.env = env.clone();
+    }
 }
 
 impl Drop for Thread{
@@ -185,9 +204,9 @@ use core::{mem::size_of, ptr::null_mut};
 use page::{PAGE_SIZE, free_page};
 use alloc::{prelude::v1::*};
 
-use crate::{uart, interrupt::trap::{Environment, Register}, memory::{allocator::alloc, page, page_table::{SATP}}, sync::Mutex};
+use crate::{interrupt::trap::{Environment, Register}, memory::{allocator::alloc, page, page_table::{self, SATP}}, sync::Mutex, uart};
 
-use super::{delete_pipe, info::{ExecutionInfo}, process::{Process, STACK_PAGE_NUM}, task_manager::TaskState};
+use super::{delete_pipe, task_info::{ExecutionInfo}, process::{Process, STACK_PAGE_NUM}, task_manager::TaskState};
 
 
 

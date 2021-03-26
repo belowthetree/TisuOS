@@ -26,42 +26,33 @@ pub fn load_elf(file : File) {
             let program_offset = elf.get_program_header_addr();
             let num = elf.program_header_num as usize;
             let entry = elf.entry as usize;
-            let pt = PageTable::new();
+            let id = exec(entry);
+            let mgr = crate::task::get_task_mgr().unwrap();
             for i in 0..num{
                 let offset = program_offset + i * phsize;
-                if let Some(phr) = file.read(offset, phsize){
-                    let program = &*(phr.get_addr() as *const ProgramHeader);
-                    if program.is_loadable(){
-                        let virtual_addr = program.virtual_addr as usize;
-                        let mem_size = program.segment_size_in_memory as usize;
-                        let file_size = program.segment_size_in_file as usize;
-                        let num_page = (mem_size + PAGE_SIZE - 1) / PAGE_SIZE;
-                        let physic_addr = alloc_user_page(num_page) as usize;
-                        if let Some(buffer) =
-                                file.read(program.offset_in_file as usize, file_size){
-                            (buffer.get_addr() as *mut u8).copy_to(physic_addr as *mut u8, file_size);
-                            for n in 0..num_page{
-                                let virtual_addr = virtual_addr + n * PAGE_SIZE;
-                                let physic_addr = physic_addr + n * PAGE_SIZE;
-                                pt.map_user_code(virtual_addr, physic_addr);
-                            }
-                        }
-                        else{
-                            pt.free();
-                            return;
+                let phr = file.read(offset, phsize).unwrap();
+                let program = &*(phr.get_addr() as *const ProgramHeader);
+                if program.is_loadable(){
+                    let virtual_addr = program.virtual_addr as usize;
+                    let mem_size = program.segment_size_in_memory as usize;
+                    let file_size = program.segment_size_in_file as usize;
+                    let num_page = (mem_size + PAGE_SIZE - 1) / PAGE_SIZE;
+                    let physic_addr = alloc_user_page(num_page) as usize;
+                    if let Some(buffer) =
+                            file.read(program.offset_in_file as usize, file_size){
+                        (buffer.get_addr() as *mut u8).copy_to(physic_addr as *mut u8, file_size);
+                        for n in 0..num_page{
+                            let virtual_addr = virtual_addr + n * PAGE_SIZE;
+                            let physic_addr = physic_addr + n * PAGE_SIZE;
+                            mgr.map_code(id, virtual_addr, physic_addr);
                         }
                     }
                     else{
-                        pt.free();
+                        mgr.program_exit(id);
                         return;
                     }
                 }
-                else{
-                    pt.free();
-                    return;
-                }
             }
-            exec(entry, page_table::make_satp(pt as *mut PageTable as usize, 0));
         }
     }
 }

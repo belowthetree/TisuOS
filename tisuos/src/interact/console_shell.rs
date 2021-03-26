@@ -139,7 +139,6 @@ impl ConsoleShell {
                 }
                 "lsp" => {
                     list_thread();
-                    list();
                 }
                 "lsm" => {
                     unsafe {
@@ -198,4 +197,4 @@ fn output(c : u8){
 use super::console_input::pop;
 use alloc::prelude::v1::*;
 use crate::{filesystem::{elf::load_elf, filetree::{directory::{Directory, get_directory}, file::{File, OpenFlag}}, image::bmp::generate_image}, graphic::{canvas::grid::Grid, colorblock::ColorBlock}, libs::{graphic::Pixel,
-        str::convert_to_usize, syscall::{list_thread}}, memory::allocator, task::thread::list, uart, virtio::gpu_device::invalid};
+        str::convert_to_usize, syscall::{list_thread}}, memory::allocator, uart, virtio::gpu_device::invalid};

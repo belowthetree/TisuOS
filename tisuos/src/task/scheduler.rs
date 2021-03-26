@@ -2,9 +2,8 @@
 //! 
 //! 2021年3月23日 zg
 
-use crate::interrupt::trap::Environment;
 
-use super::{info::ExecutionInfo, task_manager::{ScheduleMethod, SchedulerOp, TaskState}};
+use super::{task_manager::{ScheduleMethod, SchedulerOp, TaskState}};
 
 
 pub struct Scheduler{
@@ -20,36 +19,18 @@ impl Scheduler {
 }
 
 impl SchedulerOp for Scheduler {
-    fn schedule<T:super::task_manager::TaskPoolOp>(&mut self, task_pool :&mut T,
-            env : &mut Environment)->usize {
+    fn schedule<T:super::task_manager::TaskPoolOp>(&mut self, task_pool :&mut T)->Option<usize> {
         let next;
         match self.method {
             ScheduleMethod::Rotation => {
-                let cur = task_pool.select(|info|{
-                    if info.state == TaskState::Running && info.env.hartid == env.hartid {
-                        true
-                    }
-                    else {
-                        false
-                    }
-                }).unwrap();
-                let mut info = task_pool.get_task_exec(cur).unwrap();
-                info.env = *env;
-                info.state = TaskState::Waiting;
-                next = task_pool.select(|info| {
-                    if info.state == TaskState::Waiting {
-                        true
-                    }
-                    else {
-                        false
-                    }
-                }).unwrap();
-                task_pool.set_task_exec(cur, &info).ok();
+                next = task_pool.find(|info| {
+                    info.state == TaskState::Waiting
+                });
             }
         }
         next
     }
 
-    fn switch_method(&mut self, method : super::task_manager::ScheduleMethod) {
+    fn switch_method(&mut self, _ : super::task_manager::ScheduleMethod) {
     }
 }

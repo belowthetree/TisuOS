@@ -17,7 +17,7 @@ impl Register {
 }
 /// 保存需要恢复的环境
 #[allow(dead_code)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Environment{
     pub regs    :     [usize;32], // 0 ~ 255
     fregs       :     [usize;32], // 256 ~ 511
@@ -35,15 +35,6 @@ impl Environment {
             epc:   0,
             hartid: 0,
         }
-    }
-    pub fn copy(&mut self, env : &Environment){
-        for i in 0..32{
-            self.regs[i] = env.regs[i];
-            self.fregs[i] = env.fregs[i];
-        }
-        self.satp = env.satp;
-        self.epc = env.epc;
-        self.hartid = env.hartid;
     }
 }
 
@@ -119,15 +110,13 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                 // pc = waiting as usize;
             }
             12 => {
-                println!("into m_trap cause: {:x}, hartid: {:x}, status: {:x}, epc: {:x}, sp: {:x}, satp {:x}",
-                    cause, hartid, _status, env.epc, _sp, env.satp);
-                println!("Instruction page fault {}", 0);
+                panic!("Instruction page fault {}", 0);
             }
             13 => {
-                println!("Load page fault");
+                panic!("Load page fault");
             }
             15 => {
-                println!("Store page fault epc {:x}", env.epc);
+                panic!("Store page fault epc {:x}", env.epc);
             }
             _ => {
                 println!("into m_trap cause: {:x}, hartid: {:x}, status: {:x}, epc: {:x}, sp: {:x}, satp {:x}",
@@ -177,7 +166,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
 }
 
 
-use crate::{memory::{KERNEL_STACK_END, KERNEL_STACK_START}, sync::Mutex, task::{get_task_mgr, thread}};
+use crate::{memory::{KERNEL_STACK_END, KERNEL_STACK_START}, sync::Mutex, task::{get_task_mgr}};
 
 use crate::{plic, uart, cpu};
 use super::{syscall, timer};

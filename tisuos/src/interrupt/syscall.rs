@@ -20,8 +20,7 @@ pub fn handler(env : &Environment) -> usize {
             env.regs[Register::A3.val()] != 0);
         }
         5 => {
-            process::print();
-            thread::print();
+            // 输出任务信息
         }
         6 => {
             if let Some(addr) = allocator::alloc(env.regs[Register::A1.val()], true) {
@@ -34,12 +33,15 @@ pub fn handler(env : &Environment) -> usize {
         }
         60 => {
             println!("delete process");
-            get_task_mgr()
+            let mgr = get_task_mgr().unwrap();
+            mgr.program_exit(env.hartid);
+            mgr.schedule(&env);
         }
         61 => {
             println!("delete thread");
-            thread::delete_current_thread(env.hartid);
-            thread::schedule(env);
+            let mgr = get_task_mgr().unwrap();
+            mgr.task_exit(env.hartid);
+            mgr.schedule(&env);
         }
         _ => {}
     }
@@ -47,23 +49,23 @@ pub fn handler(env : &Environment) -> usize {
 }
 
 fn fork(env : &Environment){
-    thread::fork(env);
+    get_task_mgr().unwrap().fork_task(env);
 }
 #[allow(dead_code)]
 fn branch(func : usize, pid : usize)->Result<(), ()>{
-    let p = get_process_by_pid(pid).unwrap();
-    p.fork(func)
+    // 从函数创建任务
+    Err(())
 }
 
-fn exec(func : usize, satp : usize, is_kernel : bool){
-    if let Some(p) = Process::from_satp(func, satp, is_kernel){
-        add_process(p);
-    }
+fn exec(func : usize, satp : usize, is_kernel : bool)->usize {
+    let mgr = get_task_mgr().unwrap(); 
+    let id = mgr.create_task(func, is_kernel).unwrap();
+    id
 }
 
 
 
-use crate::{memory::allocator, task::{process::{Process, self}, thread::{self}}};
+use crate::{memory::allocator};
 use crate::uart;
 use crate::task::get_task_mgr;
 use super::trap::{Environment, Register};

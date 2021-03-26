@@ -129,7 +129,7 @@ impl Mutex{
             }
         }
     }
-    pub fn sync<F>(&mut self, f : F) where F : Fn() {
+    pub fn sync<F>(&mut self, mut f : F) where F : FnMut() {
         self.lock();
         f();
         self.unlock();

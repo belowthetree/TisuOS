@@ -20,9 +20,9 @@ pub fn fork()->usize{
     }
 }
 
-pub fn exec(func : usize, satp : usize){
+pub fn exec(func : usize)->usize {
     unsafe {
-        make_syscall(4, func, satp, 0, 0);
+        make_syscall(4, func, 0, 0, 0)
     }
 }
 

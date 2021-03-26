@@ -106,7 +106,7 @@ impl BlockDevice {
 				let pid = (*rq).waiter_pid;
 
 				if pid > 0{
-					wake_up(pid);
+					// wake_up(pid);
 					free(rq as *mut u8);
 				}
 				else {
@@ -182,11 +182,11 @@ pub fn async_write(block_idx : usize, buffer : *mut u8, size : u32, offset : usi
 			assert!(block_idx < block.len());
 			let request = alloc(size_of::<Request>(), true).unwrap() as *mut Request;
 			if handler == 0{}
-			else if let Some(mut p) = process::create_process(handler as usize, true){
-				p.sleep();
-				(*request).waiter_pid = p.pid;
-				process::add_process(p);
-			}
+			// else if let Some(mut p) = process::create_process(handler as usize, true){
+			// 	p.sleep();
+			// 	(*request).waiter_pid = p.pid;
+			// 	process::add_process(p);
+			// }
 			else{
 				println!("no write process");
 			}
@@ -200,14 +200,14 @@ pub fn async_read(block_idx : usize, buffer : *mut u8, size : u32, offset : usiz
 			assert!(block_idx < block.len());
 			let request = alloc(size_of::<Request>(), true).unwrap() as *mut Request;
 			
-			if let Some(mut p) = process::create_process(handler as usize, true){
-				p.sleep();
-				(*request).waiter_pid = p.pid;
-				process::add_process(p);
-			}
-			else{
-				println!("no read process");
-			}
+			// if let Some(mut p) = process::create_process(handler as usize, true){
+			// 	p.sleep();
+			// 	(*request).waiter_pid = p.pid;
+			// 	process::add_process(p);
+			// }
+			// else{
+			// 	println!("no read process");
+			// }
 			
 			block[block_idx].operation(buffer, size, offset, false, request);
 		}
@@ -267,7 +267,6 @@ pub fn run_interrupt() {
 	}
 }
 
-use crate::{memory::page, sync::Bool, task::process::wake_up, uart};
+use crate::{memory::page, sync::Bool, uart};
 use crate::memory::page::{alloc_kernel_page};
 use crate::memory::allocator::{alloc, free};
-use crate::{task::process};
