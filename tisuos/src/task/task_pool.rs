@@ -7,8 +7,7 @@ use core::cmp::Ordering;
 
 use crate::{interrupt::trap::Environment, sync::Mutex};
 
-use super::{info::ExecutionInfo, process::Process, task_manager::{TaskPoolOp},
-    thread::Thread};
+use super::{info::ExecutionInfo, process::Process, task_manager::{TaskPoolOp, TaskState}, thread::Thread};
 use alloc::{prelude::v1::*};
 
 pub struct TaskPool {
@@ -32,7 +31,8 @@ impl TaskPool {
 impl TaskPoolOp for TaskPool {
     fn create(&mut self, func : usize, is_kernel : bool)->Option<usize> {
         let p = Process::new(func, is_kernel).unwrap();
-        let id = p.pid;
+        // let t = Thread::new(func, &p)
+        let id = *p.tid.first().unwrap();
         self.thread_lock.lock();
         self.process.push(p);
         self.thread_lock.unlock();
@@ -55,6 +55,7 @@ impl TaskPoolOp for TaskPool {
     fn get_task_exec(&mut self, id : usize)->Option<ExecutionInfo> {
         self.thread_lock.lock();
         for th in self.thread.iter() {
+            println!("tid {}", th.tid);
             if th.tid == id {
                 self.thread_lock.unlock();
                 return Some(th.get_exec_info());
@@ -84,16 +85,41 @@ impl TaskPoolOp for TaskPool {
         None
     }
 
-    fn delete_task(&mut self, id : usize)->Result<(), ()> {
+    fn remove_task(&mut self, id : usize)->Result<(), ()> {
         self.thread_lock.lock();
-        for (i, th) in self.thread.iter().enumerate() {
-            if th.tid == id {
+        for (i, t) in self.thread.iter().enumerate() {
+            if t.tid == id {
                 self.thread.remove(i);
                 self.thread_lock.unlock();
                 return Ok(());
             }
         }
+        Err(())
+    }
+
+    fn remove_program(&mut self, id : usize)->Result<(), ()> {
+        self.thread_lock.lock();
+        let mut v = vec![];
+        for (i, t) in self.thread.iter().enumerate() {
+            if t.pid == id {
+                v.push(i);
+            }
+        }
+        let mut cnt = 0;
+        for idx in v {
+            self.thread.remove(idx - cnt);
+            cnt += 1;
+        }
         self.thread_lock.unlock();
+        self.process_lock.lock();
+        for (i, p) in self.process.iter().enumerate() {
+            if p.pid == id {
+                self.process.remove(i);
+                self.thread_lock.unlock();
+                return Ok(());
+            }
+        }
+        self.process_lock.unlock();
         Err(())
     }
 
@@ -120,7 +146,11 @@ impl TaskPoolOp for TaskPool {
     }
 
     fn fork(&mut self, env : &Environment)->Option<usize> {
-        let th = Thread::copy(&env).unwrap();
+        let id = self.select(|info| {
+            info.state == TaskState::Running && info.env.hartid == env.hartid
+        }).unwrap();
+        let info = self.get_task_exec(id).unwrap();
+        let th = Thread::copy(&info).unwrap();
         let id = th.tid;
         self.thread_lock.lock();
         self.thread.push(th);
@@ -129,4 +159,4 @@ impl TaskPoolOp for TaskPool {
     }
 }
 
-
+use crate::uart;

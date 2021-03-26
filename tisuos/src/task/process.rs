@@ -4,7 +4,6 @@
 //! 2020年12月12日 zg
 
 use alloc::{prelude::v1::*};
-use thread::{create_thread, delete, get_current_thread_pid, get_thread_by_id, run};
 use virtio::device;
 
 extern "C" {
@@ -59,24 +58,19 @@ impl Process {
         }
         else {
             let pt = page_table::PageTable::new();
-            if pt.is_null(){
-                return None;
-            }
             // 页表映射部分
-            unsafe {
-                // 这一步极为重要，将内核中的一些函数（process_exit）进行映射
-                // 对于内核权限的进程而言，还需要获取整个内存的访问权限
-                page_table::map_kernel_area(&mut *pt, is_kernel);
-                // 代码、栈的映射
-                if !is_kernel{
-                    (*pt).map_user(func as usize, func as usize);
-                }
-                else {
-                    (*pt).map_kernel(func as usize, func as usize);
-                }
+            // 这一步极为重要，将内核中的一些函数（process_exit）进行映射
+            // 对于内核权限的进程而言，还需要获取整个内存的访问权限
+            page_table::map_kernel_area(&mut *pt, is_kernel);
+            // 代码、栈的映射
+            if !is_kernel{
+                pt.map_user(func as usize, func as usize);
             }
-            let satp = page_table::make_satp(pt as usize, 0);
-            
+            else {
+                pt.map_kernel(func as usize, func as usize);
+            }
+            let satp = page_table::make_satp(pt as *mut PageTable as usize, 0);
+
             unsafe {
                 PID_CNT = PID_CNT % PROCESS_NUM_MAX;
                 PID_CNT += 1;
@@ -91,10 +85,6 @@ impl Process {
                     tid : Vec::<usize>::new(),
                     hartid : 0
                 };
-            if rt.fork(func).is_err(){
-                return None;
-            }
-            rt.first_thread().env.regs[Register::RA.val()] = process_exit as usize;
             Some(rt)
         }
     }
@@ -110,17 +100,18 @@ impl Process {
         }
         //
         else {
-            let pt = SATP::from(satp).get_page_table();
-            if pt.is_null(){
+            let t = SATP::from(satp);
+            let pt = t.get_page_table();
+            if pt.is_none(){
                 return None;
             }
+            let pt = pt.unwrap();
             // 页表映射部分
-            unsafe {
-                // 这一步极为重要，将内核中的一些函数（process_exit）进行映射
-                // 对于内核权限的进程而言，还需要获取整个内存的访问权限
-                page_table::map_kernel_area(&mut *pt, is_kernel);
-            }
-            let satp = page_table::make_satp(pt as usize, 0);
+            // 这一步极为重要，将内核中的一些函数（process_exit）进行映射
+            // 对于内核权限的进程而言，还需要获取整个内存的访问权限
+            page_table::map_kernel_area(&mut *pt, is_kernel);
+
+            let satp = page_table::make_satp(pt as *mut PageTable as usize, 0);
             unsafe {
                 PID_CNT = PID_CNT % PROCESS_NUM_MAX;
                 PID_CNT += 1;
@@ -134,25 +125,15 @@ impl Process {
                 tid : Vec::<usize>::new(),
                 hartid : 0
             };
-            if rt.fork(func).is_err(){
-                None
-            }else{
-                Some(rt)
-            }
+            // if rt.fork(func).is_err(){
+            //     None
+            // }else{
+            //     Some(rt)
+            // }
+            None
         }
     }
-    pub fn sleep(&mut self){
-        self.state = ProcessState::Sleeping;
-    }
-    pub fn fork(&mut self, func : usize)->Result<(), ()>{
-        if let Some(thread) = create_thread(func, self){
-            self.tid.push(thread.tid);
-            Ok(())
-        }
-        else{
-            Err(())
-        }
-    }
+
     pub fn drop_thread(&mut self, tid : usize){
         for (idx, th) in self.tid.iter().enumerate() {
             if *th == tid{
@@ -161,9 +142,7 @@ impl Process {
             }
         }
     }
-    pub fn first_thread<'a>(&self)->&'a mut Thread{
-        get_thread_by_id(self.tid[0]).unwrap()
-    }
+
     pub fn get_prog_info(&self)->ProgramInfo {
         ProgramInfo::from_program(self)
     }
@@ -201,120 +180,12 @@ pub fn init(){
 /// 创建一个基本进程用于避免其它进程清空时报错
 pub fn start_init_process(){
     println!("start init process");
-    unsafe {
-        if let Some(p) = Process::new(init_process as usize, true) {
-            if let Some(list) = &mut PROCESS_LIST{
-                let t = p.first_thread();
-                run(*p.tid.first().unwrap(), 0);
-                (*TMP_ENV[0]).copy(&t.env);
-                list.push_front(p);
-                switch_kernel_process(TMP_ENV[0] as *mut u8);
-            }
-        }
-    }
-}
-/// ### 唤醒进程
-/// 从 Sleeping 进入 Scheduling 状态，仅供机器模式使用
-pub fn wake_up(pid : usize){
-    unsafe {
-        PROCESS_LIST_LOCK.lock();
-        if let Some(list) = &mut PROCESS_LIST {
-            for p in list {
-                if p.pid == pid {
-                    p.state = ProcessState::Scheduling;
-                    break;
-                }
-            }
-        }
-        PROCESS_LIST_LOCK.unlock();
-    }
-}
-
-/// 添加进程到调度队列
-pub fn add_process(p : Process) {
-    unsafe {
-        PROCESS_LIST_LOCK.lock();
-        if let Some(list) = &mut PROCESS_LIST{
-            list.push_back(p);
-        }
-        PROCESS_LIST_LOCK.unlock();
-    }
-}
-
-/// ## 线程控制部分
-/// 
-
-pub fn drop_thread(pid : usize, tid : usize){
-    unsafe {
-        PROCESS_LIST_LOCK.lock();
-        if let Some(list) = &mut PROCESS_LIST{
-            for (idx, p) in list.iter_mut().enumerate(){
-                if p.pid == pid {
-                    p.drop_thread(tid);
-                    if p.tid.len() <= 0{
-                        list.remove(idx);
-                        break;
-                    }
-                }
-            }
-        }
-        PROCESS_LIST_LOCK.unlock();
-    }
-}
-
-/// 
-/// ## 对外功能接口，内核权限下可用
-/// 
-
-pub fn print(){
-    unsafe {
-        if let Some(list) = &mut PROCESS_LIST{
-            for p in list{
-                println!("process {}, state {:?}", p.pid, p.state);
-            }
-        }
-    }
-}
-
-pub fn delete_current_process(hartid : usize){
-    unsafe {
-        PROCESS_LIST_LOCK.lock();
-        if let Some(list) = &mut PROCESS_LIST{
-            let pid = get_current_thread_pid(hartid).unwrap();
-            for (idx, p) in list.iter().enumerate(){
-                if p.pid == pid {
-                    for tid in p.tid.iter(){
-                        delete(*tid);
-                    }
-                    list.remove(idx);
-                    break;
-                }
-            }
-        }
-        PROCESS_LIST_LOCK.unlock();
-    }
-}
-
-/// ## 根据 id 获取进程
-pub fn get_process_by_pid<'a>(pid : usize)->Option<&'a mut Process>{
-    unsafe {
-        PROCESS_LIST_LOCK.lock();
-        if let Some(list) = &mut PROCESS_LIST{
-            for p in list{
-                if p.pid == pid{
-                    PROCESS_LIST_LOCK.unlock();
-                    return Some(p);
-                }
-            }
-        }
-        PROCESS_LIST_LOCK.unlock();
-        None
-    }
-}
-
-/// ### 创建一个新的进程
-pub fn create_process(func : usize, is_kernel : bool)->Option<Process>{
-    Process::new(func, is_kernel)
+    let mgr = super::get_task_mgr().unwrap();
+    println!("before create task");
+    let id = mgr.create_task(init_process as usize, true).unwrap();
+    println!("after create task {}", id);
+    mgr.start(id);
+    panic!("after schdule {}", 0);
 }
 
 /// 初始化进程
@@ -347,7 +218,7 @@ pub fn init_process(){
 }
 
 extern crate alloc;
-use crate::{desktop::plane::Plane, filesystem, interact::console_shell, interrupt::timer, libs::syscall::{fork}, memory::{allocator, user_allocator::MemoryList}, sync::Mutex, virtio::{self, gpu_device}};
+use crate::{desktop::plane::Plane, filesystem, interact::console_shell, interrupt::timer, libs::syscall::{fork}, memory::{allocator, page_table::PageTable, user_allocator::MemoryList}, sync::Mutex, virtio::{self, gpu_device}};
 // use syscall::fork;
 use core::{mem::size_of, ptr::null_mut};
 use alloc::{collections::VecDeque};

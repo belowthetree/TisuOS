@@ -43,6 +43,7 @@ impl Clone for Image {
 
 /// ## 默认以 Pixel 为单位读写
 impl Image {
+    /// ### 从全局图片库中查找图片，如果不存在则创建一个
     pub fn request(path : &String, width : usize, height : usize)->Option<Image> {
         unsafe {
             if let Some(gi) = &mut GLOBAL_IMAGE {
@@ -99,19 +100,19 @@ impl Image {
     }
     pub fn resize(&mut self, width : usize, height : usize) {
         let tm = Block::<Pixel>::new(width * height);
-        let ptr1 = self.data.get_addr();
-        let ptr2 = tm.get_addr();
+        // let ptr1 = self.data.get_addr();
+        // let ptr2 = tm.get_addr();
         for y in 0..height {
             let yy = y * self.height / height;
             let t1 = y * width;
             let t2 = yy * self.width;
             for x in 0..width {
-                unsafe {
-                    let xx = x * self.width / width;
-                    let v = *(ptr1.add(xx + t2));
-                    ptr2.add(x + t1).write_volatile(v);
-                    // tm.set(x + t1, v, 1);
-                }
+                let xx = x * self.width / width;
+                tm.set(x + t1, self.data.get(xx + t2).unwrap(), 1);
+                // let v = *(ptr1.add(xx + t2));
+                // ptr2.add(x + t1).write_volatile(v);
+                // tm.set(x + t1, v, 1);
+            
             }
         }
         self.width = width;

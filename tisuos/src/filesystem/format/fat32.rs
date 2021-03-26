@@ -257,7 +257,8 @@ impl FATManger {
             sync_read_buffer(self.block_idx, &buffer, 0, self.cluster_size as u32, addr);
             for idx in (0..self.cluster_size).step_by(step){
                 unsafe {
-                    let item = buffer.get_addr().add(idx) as *mut FATShortDirItem;
+                    let tad = buffer.get_addr() as *mut u8;
+                    let item = tad.add(idx) as *mut FATShortDirItem;
                     if (*item).is_empty() ||(*item).is_delete() {
                         if cnt == 0{
                             record = idx;

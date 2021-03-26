@@ -8,10 +8,11 @@
 
 pub mod process;
 pub mod thread;
+mod info;
+/// 下边三个模块还未添加到内核功能中
 pub mod task_manager;
 pub mod scheduler;
 pub mod task_pool;
-mod info;
 
 static mut PIPE : Option<Vec<info::PipeUnit>> = None;
 pub static mut TASK_MANAGER : Option<TaskManager<Scheduler, TaskPool>> = None;
@@ -25,15 +26,17 @@ pub fn init() {
     }
 }
 
-/// ## 任务操作接口
-/// 试用接口化
-pub fn schedule(env : &mut Environment, hartid : usize){
+pub fn get_task_mgr()->Option<&'static mut TaskManager<Scheduler, TaskPool>> {
     unsafe {
         if let Some(mgr) = &mut TASK_MANAGER {
-            mgr.schedule(env, hartid);
+            Some(mgr)
+        }
+        else {
+            None
         }
     }
 }
+
 
 pub fn push_pipe(tid : usize, val : usize) {
     unsafe {

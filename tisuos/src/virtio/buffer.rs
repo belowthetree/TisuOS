@@ -63,7 +63,7 @@ impl Buffer {
         self.block_idx = block_idx;
         self.idx = idx;
         self.mutex.write();
-        sync_read(block_idx, self.addr.get_addr(), self.size as u32, idx);
+        sync_read(block_idx, self.addr.get_addr() as *mut u8, self.size as u32, idx);
         self.mutex.unlock();
     }
     /// ### 从指定 Block 拷贝
@@ -89,7 +89,7 @@ impl Buffer {
         self.is_write = false;
         self.mutex.unlock();
         self.mutex.read();
-        sync_write(self.block_idx, self.addr.get_addr(), self.size as u32, self.idx);
+        sync_write(self.block_idx, self.addr.get_addr() as *mut u8, self.size as u32, self.idx);
         // println!("buffer.rs wirtedown finish");
         self.mutex.unlock();
     }
@@ -102,9 +102,8 @@ impl Buffer {
         let size = min(self.idx + self.size - idx, len);
         let st = idx - self.idx;
         self.mutex.write();
-        unsafe {
-            self.addr.get_addr().add(st).write_bytes(0, size);
-        }
+        self.addr.set(st, 0, size);
+        // self.addr.get_addr().add(st).write_bytes(0, size);
         self.is_write = true;
         self.mutex.unlock();
     }

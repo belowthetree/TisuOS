@@ -24,8 +24,10 @@ impl SATP {
     pub fn val(&self) -> usize{
         self.flag as usize
     }
-    pub fn get_page_table(&self) ->*mut PageTable{
-        self.get_ppn_addr() as *mut PageTable
+    pub fn get_page_table(&self) ->Option<&mut PageTable>{
+        unsafe {
+            Some(&mut *(self.get_ppn_addr() as *mut PageTable))
+        }
     }
     pub fn is_map(&self)->bool{
         self.get_ppn_addr() != 0
@@ -108,9 +110,11 @@ pub struct PageTable{
 /// 负责在内存中创建、管理对应的映射
 #[allow(dead_code)]
 impl PageTable {
-    pub fn new() ->*mut Self {
+    pub fn new() ->&'static mut Self {
         let addr = alloc_kernel_page(1);
-        addr as *mut Self
+        unsafe {
+            &mut *(addr as *mut Self)
+        }
     }
     pub fn map_user(&mut self, virtual_addr : usize, physic_addr : usize){
         self.map(virtual_addr, physic_addr, PageBit::Read.val() | PageBit::Write.val()

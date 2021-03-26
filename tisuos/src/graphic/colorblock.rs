@@ -67,7 +67,7 @@ impl ColorBlock {
             y2 : min(h2, self.y + self.height) as u32,
         };
 
-        draw_rect_override(GPU_DEVICE, rect, self.buffer.get_addr());
+        draw_rect_override(GPU_DEVICE, rect, self.buffer.get_addr() as *mut Pixel);
     }
     /// ### 绘制缓冲全部区域
     pub fn draw_override(&self) {
@@ -78,7 +78,7 @@ impl ColorBlock {
             y2 : (self.y + self.height) as u32,
         };
 
-        draw_rect_override(GPU_DEVICE, rect, self.buffer.get_addr());
+        draw_rect_override(GPU_DEVICE, rect, self.buffer.get_addr() as *mut Pixel);
     }
     /// ### 结合透明度绘制全部区域
     pub fn draw_blend(&self) {
@@ -89,7 +89,7 @@ impl ColorBlock {
             y2 : (self.y + self.height) as u32,
         };
 
-        draw_rect_blend(GPU_DEVICE, rect, self.buffer.get_addr());
+        draw_rect_blend(GPU_DEVICE, rect, self.buffer.get_addr() as *mut Pixel);
     }
     /// ### 写字
     pub fn fill_font(&self, c : char, x : usize, y : usize, height : usize, width : usize,

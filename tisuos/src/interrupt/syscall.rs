@@ -34,8 +34,7 @@ pub fn handler(env : &Environment) -> usize {
         }
         60 => {
             println!("delete process");
-            process::delete_current_process(env.hartid);
-            thread::schedule(env);
+            get_task_mgr()
         }
         61 => {
             println!("delete thread");
@@ -62,9 +61,9 @@ fn exec(func : usize, satp : usize, is_kernel : bool){
     }
 }
 
-use process::{add_process, get_process_by_pid};
+
 
 use crate::{memory::allocator, task::{process::{Process, self}, thread::{self}}};
 use crate::uart;
-
+use crate::task::get_task_mgr;
 use super::trap::{Environment, Register};

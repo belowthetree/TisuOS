@@ -21,12 +21,12 @@ impl Scheduler {
 
 impl SchedulerOp for Scheduler {
     fn schedule<T:super::task_manager::TaskPoolOp>(&mut self, task_pool :&mut T,
-            env : &mut Environment, hartid : usize)->usize {
+            env : &mut Environment)->usize {
         let next;
         match self.method {
             ScheduleMethod::Rotation => {
                 let cur = task_pool.select(|info|{
-                    if info.state == TaskState::Running && info.env.hartid == hartid {
+                    if info.state == TaskState::Running && info.env.hartid == env.hartid {
                         true
                     }
                     else {

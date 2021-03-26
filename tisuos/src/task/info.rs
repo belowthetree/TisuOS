@@ -17,6 +17,7 @@ pub struct ExecutionInfo {
 
 pub struct ProgramInfo {
     pub pid : usize,
+    pub satp : usize,
     pub state : TaskState,
     pub is_kernel : bool,
 }
@@ -55,6 +56,7 @@ impl ProgramInfo {
     pub fn default()->Self {
         Self {
             pid: 0,
+            satp : 0,
             state: TaskState::Waiting,
             is_kernel: false,
         }
@@ -63,6 +65,7 @@ impl ProgramInfo {
     pub fn from_program(process : &Process)->Self {
         Self {
             pid : process.pid,
+            satp : process.satp,
             state : process.state.to_task_state(),
             is_kernel : process.is_kernel,
         }

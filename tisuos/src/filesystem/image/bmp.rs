@@ -47,7 +47,7 @@ pub fn generate_image(file : File)->Option<Image>{
             let mut rt = Image::new(width, height, Format::RGB);
             let mut data_offset = bmp.data_offset as usize;
             let mut idx = 0;
-            let ptr = content.get_addr();
+            let ptr = content.get_addr() as *mut u8;
             let skip = (4 - (width * bmp.bitcnt as usize) % 4) % 4;
             // println!("file size {}KB, skip {} per line, size of color {} data offset {}",
             //     file.size / 1024, skip, size_of::<BMPColor>(), data_offset);

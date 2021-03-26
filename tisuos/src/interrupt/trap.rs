@@ -122,15 +122,12 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                 println!("into m_trap cause: {:x}, hartid: {:x}, status: {:x}, epc: {:x}, sp: {:x}, satp {:x}",
                     cause, hartid, _status, env.epc, _sp, env.satp);
                 println!("Instruction page fault {}", 0);
-                delete_current_thread(hartid);
             }
             13 => {
                 println!("Load page fault");
-                delete_current_thread(hartid);
             }
             15 => {
                 println!("Store page fault epc {:x}", env.epc);
-                delete_current_thread(hartid);
             }
             _ => {
                 println!("into m_trap cause: {:x}, hartid: {:x}, status: {:x}, epc: {:x}, sp: {:x}, satp {:x}",
@@ -148,7 +145,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                     let ptr = 0x200_0000 as *mut u32;
                     ptr.add(hartid).write_volatile(0);
                 }
-                thread::schedule(env);
+                get_task_mgr().unwrap().schedule(env);
                 // println!("core {} receive", hartid);
                 pc = waiting as usize;
             },
@@ -163,7 +160,8 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                     ptr.add(2).write_volatile(1);
                     ptr.add(3).write_volatile(1);
                 }
-                thread::schedule(env);
+                // thread::schedule(env);
+                get_task_mgr().unwrap().schedule(env);
                 pc = waiting as usize;
             },
             11 => {
@@ -179,9 +177,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
 }
 
 
-use thread::delete_current_thread;
-
-use crate::{memory::{KERNEL_STACK_END, KERNEL_STACK_START}, sync::Mutex, task::{thread}};
+use crate::{memory::{KERNEL_STACK_END, KERNEL_STACK_START}, sync::Mutex, task::{get_task_mgr, thread}};
 
 use crate::{plic, uart, cpu};
 use super::{syscall, timer};

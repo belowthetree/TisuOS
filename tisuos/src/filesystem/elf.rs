@@ -20,7 +20,7 @@ pub fn load_elf(file : File) {
         else{
             return;
         }
-        let elf = &*(head.get_addr() as *const ELF);
+        let elf = head.type_as::<ELF>();
         if elf.is_elf(){
             let phsize = elf.get_program_header_size();
             let program_offset = elf.get_program_header_addr();
@@ -39,30 +39,29 @@ pub fn load_elf(file : File) {
                         let physic_addr = alloc_user_page(num_page) as usize;
                         if let Some(buffer) =
                                 file.read(program.offset_in_file as usize, file_size){
-                            buffer.get_addr().copy_to(physic_addr as *mut u8, file_size);
+                            (buffer.get_addr() as *mut u8).copy_to(physic_addr as *mut u8, file_size);
                             for n in 0..num_page{
                                 let virtual_addr = virtual_addr + n * PAGE_SIZE;
                                 let physic_addr = physic_addr + n * PAGE_SIZE;
-                                (*pt).map_user_code(virtual_addr, physic_addr);
+                                pt.map_user_code(virtual_addr, physic_addr);
                             }
                         }
                         else{
-                            (*pt).free();
+                            pt.free();
                             return;
                         }
                     }
                     else{
-                        (*pt).free();
+                        pt.free();
                         return;
                     }
                 }
                 else{
-                    (*pt).free();
+                    pt.free();
                     return;
                 }
             }
-            exec(entry, page_table::make_satp(pt as usize, 0));
-            // return Some((entry, page_table::make_satp(pt as usize, 0)));
+            exec(entry, page_table::make_satp(pt as *mut PageTable as usize, 0));
         }
     }
 }

@@ -67,10 +67,15 @@ impl<T1:Copy> Block<T1> {
         }
     }
     
-    pub fn get_addr(&self)->*mut T1 {
-        self.addr
+    pub fn get_addr(&self)->usize {
+        self.addr as usize
     }
 
+    pub fn type_as<T>(&self)->&mut T {
+        unsafe {
+            &mut *(self.addr as *mut T)
+        }
+    }
     pub fn convert<T2:Copy>(self)->Block<T2> {
         let size = self.size * size_of::<T1>() / size_of::<T2>();
         let rt = Block::<T2>::new(size);
