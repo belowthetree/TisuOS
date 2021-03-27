@@ -64,10 +64,11 @@ impl ProgramInfo {
     }
     
     pub fn from_program(process : &Process)->Self {
+        let info = &process.info;
         Self {
-            pid : process.pid,
-            satp : process.satp,
-            state : process.state.to_task_state(),
+            pid : info.pid,
+            satp : info.satp,
+            state : info.state,
             is_kernel : process.is_kernel,
         }
     }

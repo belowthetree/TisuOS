@@ -32,4 +32,10 @@ pub fn list_thread(){
     }
 }
 
+pub fn branch(func : usize)->usize {
+    unsafe {
+        make_syscall(7, func, 0, 0, 0)
+    }
+}
+
 // use crate::{cpu, memory::page::TRAP_STACK_END, uart};

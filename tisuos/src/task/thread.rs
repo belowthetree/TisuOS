@@ -7,9 +7,8 @@
 #![allow(dead_code)]
 
 extern "C" {
-    pub fn switch_user_process(env : *mut u8) -> usize;
-    pub fn switch_kernel_process(env : *mut u8) -> usize;
     fn thread_exit();
+    fn process_exit();
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -54,37 +53,23 @@ impl Thread {
         let stack_bottom;
         let tid = unsafe{ THREAD_CNT };
         let stack_top;
-        if p.is_kernel{
-            stack_bottom = page::alloc_kernel_page(STACK_PAGE_NUM);
-        }
-        else{
-            stack_bottom = page::alloc_user_page(STACK_PAGE_NUM);
-        }
-        if stack_bottom.is_null(){
-            return None;
-        }
-        let satp = SATP::from(p.satp);
-        let pt = satp.get_page_table().unwrap();
-        page_table::map_kernel_area(&mut *pt, p.is_kernel);
-        if p.is_kernel{
-            for i in 0..STACK_PAGE_NUM{
-                let addr = stack_bottom as usize + i * PAGE_SIZE;
-                pt.map_kernel_data(addr, addr);
-            }
+        if let Some(st) = Thread::stack(p.is_kernel) {
+            stack_bottom = st;
         }
         else {
-            for i in 0..STACK_PAGE_NUM{
-                let addr = stack_bottom as usize + i * PAGE_SIZE;
-                pt.map_user_data(addr, addr);
-            }
+            return None;
         }
-        
+        let satp = SATP::from(p.info.satp);
+        let pt = satp.get_page_table().unwrap();
+        page_table::map_kernel_area(&mut *pt, p.is_kernel);
+        Thread::map_stack(pt, stack_bottom, p.is_kernel);
 
         stack_top = stack_bottom as usize + PAGE_SIZE * STACK_PAGE_NUM;
         env.epc = func;
-        env.satp = p.satp;
+        env.satp = p.info.satp;
+        env.regs[Register::A0.val()] = tid;
         env.regs[Register::SP.val()] = stack_top;
-        env.regs[Register::RA.val()] = thread_exit as usize;
+        env.regs[Register::RA.val()] = process_exit as usize;
         unsafe {
             THREAD_CNT = THREAD_CNT + 1;
             if THREAD_CNT == 0{
@@ -95,41 +80,27 @@ impl Thread {
             env : env,
             state : ThreadState::Waiting,
             stack_top : stack_top as *mut u8,
-            pid : p.pid,
+            pid : p.info.pid,
             tid : tid,
             is_kernel : p.is_kernel,
         })
     }
     
-    pub fn copy(src_th : &Thread)->Option<Self>{
+    pub fn fork(src_th : &Thread)->Option<Self>{
         let mut env = src_th.env;
         let stack_bottom;
         let tid = unsafe{ THREAD_CNT };
         let stack_top;
-        if src_th.is_kernel{
-            stack_bottom = page::alloc_kernel_page(STACK_PAGE_NUM);
+        if let Some(st) = Thread::stack(src_th.is_kernel) {
+            stack_bottom = st;
         }
-        else{
-            stack_bottom = page::alloc_user_page(STACK_PAGE_NUM);
-        }
-        if stack_bottom.is_null(){
+        else {
             return None;
         }
         let satp = SATP::from(src_th.env.satp);
         let pt = satp.get_page_table().unwrap();
+        Thread::map_stack(pt, stack_bottom, src_th.is_kernel);
         unsafe {
-            if src_th.is_kernel{
-                for i in 0..STACK_PAGE_NUM{
-                    let addr = stack_bottom as usize + i * PAGE_SIZE;
-                    pt.map_kernel_data(addr, addr);
-                }
-            }
-            else {
-                for i in 0..STACK_PAGE_NUM{
-                    let addr = stack_bottom as usize + i * PAGE_SIZE;
-                    pt.map_user_data(addr, addr);
-                }
-            }
             let stack_size = STACK_PAGE_NUM * PAGE_SIZE;
             let src = (src_th.stack_top as usize - stack_size) as *mut u8;
             stack_bottom.copy_from(src, stack_size);
@@ -138,7 +109,7 @@ impl Thread {
         stack_top = stack_bottom as usize + PAGE_SIZE * STACK_PAGE_NUM;
         env.epc = src_th.env.epc + 4;
         env.regs[Register::SP.val()] = stack_top - (src_th.stack_top as usize - src_th.env.regs[Register::SP.val()]);
-        println!("thread copy src tid {} stack {:x} sp {:x}, new stack {:x} sp {:x} tid {}",
+        println!("thread fork src tid {} stack {:x} sp {:x}, new stack {:x} sp {:x} tid {}",
         src_th.tid, src_th.stack_top as usize, src_th.env.regs[Register::SP.val()], stack_top,
             env.regs[Register::SP.val()], tid);
         env.regs[Register::A0.val()] = tid;
@@ -157,11 +128,74 @@ impl Thread {
             is_kernel : src_th.is_kernel,
         })
     }
-    
+
+    pub fn branch(src_th : &Thread)->Option<Self>{
+        let mut env = src_th.env;
+        let stack_bottom;
+        let tid = unsafe{ THREAD_CNT };
+        let stack_top;
+        if let Some(st) = Thread::stack(src_th.is_kernel) {
+            stack_bottom = st;
+        }
+        else {
+            return None;
+        }
+        let satp = SATP::from(src_th.env.satp);
+        let pt = satp.get_page_table().unwrap();
+        Thread::map_stack(pt, stack_bottom, src_th.is_kernel);
+
+        stack_top = stack_bottom as usize + PAGE_SIZE * STACK_PAGE_NUM;
+        env.epc = src_th.env.regs[Register::A0.val()];
+        println!("thread branch src tid {} stack {:x} sp {:x}, new stack {:x} sp {:x} tid {}",
+        src_th.tid, src_th.stack_top as usize, src_th.env.regs[Register::SP.val()], stack_top,
+            env.regs[Register::SP.val()], tid);
+        env.regs[Register::A0.val()] = tid;
+        unsafe {
+            THREAD_CNT = THREAD_CNT + 1;
+            if THREAD_CNT == 0{
+                THREAD_CNT += 1;
+            }
+        }
+        Some(Self{
+            env : env,
+            state : ThreadState::Waiting,
+            stack_top : stack_top as *mut u8,
+            pid : src_th.pid,
+            tid : tid,
+            is_kernel : src_th.is_kernel,
+        })
+    }
+
+    fn stack(is_kernel : bool)->Option<*mut u8> {
+        if is_kernel {
+            alloc_kernel_page(STACK_PAGE_NUM)
+        }
+        else {
+            alloc_user_page(STACK_PAGE_NUM)
+        }
+    }
+
+    fn map_stack(pt : &mut PageTable, stack_bottom : *mut u8, is_kernel : bool) {
+        if is_kernel{
+            for i in 0..STACK_PAGE_NUM{
+                let addr = stack_bottom as usize + i * PAGE_SIZE;
+                pt.map_kernel_data(addr, addr);
+            }
+        }
+        else {
+            for i in 0..STACK_PAGE_NUM{
+                let addr = stack_bottom as usize + i * PAGE_SIZE;
+                pt.map_user_data(addr, addr);
+            }
+        }
+    }
+}
+
+impl Thread {
     pub fn get_exec_info(&self)->ExecutionInfo {
         ExecutionInfo::from_thread(self)
     }
-    
+
     pub fn set_exec_info(&mut self, info : &ExecutionInfo) {
         self.state = ThreadState::from_task_state(info.state);
         self.stack_top = info.stack_top;
@@ -184,29 +218,18 @@ impl Drop for Thread{
 }
 
 static mut THREAD_CNT : usize = 1;
-static mut THREAD_LOCK : Mutex = Mutex::new();
-static mut THREAD_LIST : Option<Vec<Thread>> = None;
-static mut ENVIRONMENT : [*mut Environment;4] = [null_mut();4];
-static mut RECORD : [usize;4] = [0;4];
 
 /// ## 初始化临时环境内存
 pub fn init(){
-    unsafe {
-        THREAD_LIST = Some(Vec::<Thread>::new());
-        for i in 0..4{
-            ENVIRONMENT[i] = alloc(size_of::<Environment>(), true).unwrap() as *mut Environment;
-        }
-    }
 }
 
-use core::{mem::size_of, ptr::null_mut};
 
-use page::{PAGE_SIZE, free_page};
-use alloc::{prelude::v1::*};
+use crate::{interrupt::trap::{Environment, Register}, memory::{alloc_kernel_page,
+    alloc_user_page, config::PAGE_SIZE, free_page, page_table::{self, PageTable, SATP}},
+    uart};
 
-use crate::{interrupt::trap::{Environment, Register}, memory::{allocator::alloc, page, page_table::{self, SATP}}, sync::Mutex, uart};
-
-use super::{delete_pipe, task_info::{ExecutionInfo}, process::{Process, STACK_PAGE_NUM}, task_manager::TaskState};
+use super::{delete_pipe, task_info::{ExecutionInfo}, process::{Process, STACK_PAGE_NUM},
+    task_manager::TaskState};
 
 
 

@@ -27,7 +27,7 @@ pub struct TaskManager<T1, T2> {
 
 /// ## 调度器功能实现
 /// 原则上只允许通过任务 ID 进行交互，不得引用、复制以节省处理时间防止同步错误
-impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
+impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
     pub const fn new(sche : T1, pool : T2)->Self {
         Self {
             scheduler : sche,
@@ -115,7 +115,17 @@ impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
     }
 
     pub fn remove_program(&mut self, id : usize) {
-        self.task_pool.remove_program(id);
+        self.task_pool.remove_program(id).ok();
+    }
+
+    pub fn get_task_exec_info(&mut self, id : usize)->Option<ExecutionInfo> {
+        self.task_pool.get_task_exec(id)
+    }
+
+    pub fn get_current_task(&mut self, env : &Environment)->usize {
+        self.task_pool.find(|info|{
+            info.state == TaskState::Running && info.env.hartid == env.hartid
+        }).unwrap()
     }
 
     fn switch_to(&self, info : &ExecutionInfo) {
@@ -129,13 +139,24 @@ impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
     }
 }
 
+impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
+    pub fn branch(&mut self, env:&Environment)->Option<usize> {
+        self.task_pool.branch(env)
+    }
+
+    pub fn set_task_state(&mut self, id : usize, state : TaskState) {
+        self.task_pool.set_task_exec(id, |info| {
+            info.state = state;
+        }).ok();
+    }
+}
 
 /// ## 任务池操作要求
 /// 与任务池的操作根据任务号进行，不获取引用，以便模块化
-/// 因为这是个多核系统，所以与某个任务交互时必须提供足够的条件（id 或 hartid，state）
-pub trait TaskPoolOp {
+pub trait TaskPoolBasicOp {
     fn create(&mut self, func : usize, is_kernel : bool)->Option<usize>;
     fn fork(&mut self, env : &Environment)->Option<usize>;
+    fn branch(&mut self, env : &Environment)->Option<usize>;
 
     fn get_task_exec(&mut self, id : usize)->Option<ExecutionInfo>;
     fn get_task_prog(&mut self, id : usize)->Option<ProgramInfo>;
@@ -143,9 +164,12 @@ pub trait TaskPoolOp {
     fn select<F>(&mut self, f : F)->Option<Vec<usize>> where F : Fn(&ExecutionInfo)->bool;
     fn find<F>(&mut self, f : F)->Option<usize> where F : Fn(&ExecutionInfo)->bool;
 
-    fn read<F>(&mut self,f:F) where F:FnMut(&ExecutionInfo);
+    fn operation_all<F>(&mut self,f:F) where F:FnMut(&ExecutionInfo);
+
+    fn operation_once<F>(&mut self, f:F) where F:FnMut(&ExecutionInfo)->bool;
 
     fn set_task_exec<F>(&mut self, id:usize, f:F)->Result<(), ()>where F:Fn(&mut ExecutionInfo);
+
     fn remove_task(&mut self, id : usize)->Result<(), ()>;
     fn remove_program(&mut self, id : usize)->Result<(), ()>;
 }
@@ -154,7 +178,7 @@ pub trait TaskPoolOp {
 /// 算法实现由调度器自身决定
 pub trait SchedulerOp{
     /// ### 调度器保存当前任务并选取下一个任务
-    fn schedule<T:TaskPoolOp>(&mut self, task_pool :&mut T)->Option<usize>;
+    fn schedule<T:TaskPoolBasicOp>(&mut self, task_pool :&mut T)->Option<usize>;
     fn switch_method(&mut self, method : ScheduleMethod);
 }
 

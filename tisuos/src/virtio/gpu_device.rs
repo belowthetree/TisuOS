@@ -77,7 +77,7 @@ pub struct GPU{
 impl GPU {
     pub fn new(queue : *mut Queue, ptr : *mut u32, idx : usize)->Self{
         let n = (WIDTH * HEIGHT * size_of::<Pixel>() + PAGE_SIZE - 1) / PAGE_SIZE + 2;
-        let addr = alloc_kernel_page(n);
+        let addr = alloc_kernel_page(n).unwrap();
         println!("gpu at {:x}", addr as usize);
         Self{
             queue : queue,
@@ -338,7 +338,7 @@ pub fn init_gpu(ptr : *mut u32, idx : usize) ->bool {
         ptr.add(Offset::GuestPageSize.scale32()).write_volatile(PAGE_SIZE as u32);
         // 设置队列
         let num_page = (size_of::<Queue>() + PAGE_SIZE - 1) / PAGE_SIZE;
-        let queue = alloc_kernel_page(num_page) as usize;
+        let queue = alloc_kernel_page(num_page).unwrap() as usize;
         let pfn = (queue / PAGE_SIZE) as u32;
         ptr.add(Offset::QueueSel.scale32()).write_volatile(0);
         ptr.add(Offset::QueueNum.scale32()).write_volatile(VIRTIO_RING_SIZE as u32);
@@ -576,7 +576,7 @@ pub enum ControllType {
 	RespErrInvalidParameter,
 }
 
-use crate::{libs::shape::Rect, memory::{allocator::{alloc, free}, page::{PAGE_SIZE, alloc_kernel_page}}, sync::{Bool, Mutex}, uart};
+use crate::{libs::shape::Rect, memory::{alloc, alloc_kernel_page, config::PAGE_SIZE, free}, sync::{Bool, Mutex}, uart};
 use core::{cmp::min, mem::size_of};
 use alloc::{prelude::v1::*};
 use device::{Descriptor, VIRTIO_DESC_F_NEXT, VIRTIO_DESC_F_WRITE};

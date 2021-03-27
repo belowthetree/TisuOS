@@ -48,7 +48,7 @@ pub struct Request {
 	pub header: Header,
 	pub data:   Data,
 	pub status: Status,
-	pub waiter_pid : usize,
+	pub waiter_id : usize,
 	pub lock : sync::Mutex,
 }
 #[repr(C)]
@@ -237,6 +237,5 @@ pub fn run_interrupt(){
 
 use core::mem::size_of;
 
-use crate::{sync, uart};
-use crate::memory::page::{PAGE_SIZE};
+use crate::{memory::config::PAGE_SIZE, sync, uart};
 use super::{block_device, gpu_device, input_device};

@@ -90,8 +90,8 @@ impl InputDevice {
     /// 负责初始化状态队列、事件队列
     pub fn new(pin : usize, ptr : *mut u32) ->Self {
         let n = (size_of::<Queue>() + PAGE_SIZE - 1) / PAGE_SIZE;
-        let eq = alloc_kernel_page(n) as *mut Queue;
-        let sq = alloc_kernel_page(n) as *mut Queue;
+        let eq = alloc_kernel_page(n).unwrap() as *mut Queue;
+        let sq = alloc_kernel_page(n).unwrap() as *mut Queue;
         unsafe {
             ptr.add(Offset::GuestPageSize.scale32()).write_volatile(PAGE_SIZE as u32);
             ptr.add(Offset::QueueSel.scale32()).write_volatile(0);
@@ -253,9 +253,10 @@ pub fn interrupt_handler(pin : usize){
 
 use core::mem::size_of;
 
-use crate::{libs::shape::ScalePoint, virtio::{device::{Descriptor, Offset, Queue, StatusField, VIRTIO_DESC_F_WRITE,
+use crate::{libs::shape::ScalePoint, memory::{alloc_kernel_page, alloc, config::PAGE_SIZE},
+    virtio::{device::{Descriptor, Offset, Queue, StatusField, VIRTIO_DESC_F_WRITE,
     VIRTIO_F_RING_EVENT_IDX, VIRTIO_RING_SIZE}}};
-use crate::{memory::{allocator::{alloc}, page::{PAGE_SIZE, alloc_kernel_page}}, uart};
+use crate::{uart};
 
 use super::input_buffer::{add_key_press, add_key_release, add_mouse_position, add_scroll};
 

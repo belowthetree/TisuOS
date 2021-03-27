@@ -1,6 +1,7 @@
 //! # 任务系统
 //! 由进程和线程共同支撑
 //! 线程作为进程的子集，依赖于进程
+//! 同时为了使整体模块化，一切任务交由任务管理器控制，采用接口化编程，进程、线程、调度器属于可替换模块
 //! 
 //! 2021年1月1日 zg
 
@@ -8,10 +9,10 @@
 
 pub mod process;
 pub mod thread;
-mod task_info;
-/// 下边三个模块还未添加到内核功能中
-pub mod task_manager;
 pub mod scheduler;
+
+mod task_info;
+pub mod task_manager;
 pub mod task_pool;
 
 static mut PIPE : Option<Vec<task_info::PipeUnit>> = None;

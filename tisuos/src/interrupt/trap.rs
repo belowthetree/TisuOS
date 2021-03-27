@@ -45,7 +45,6 @@ pub fn init(hartid : usize){
     unsafe {
         LOCKER.lock();
         let ad = (&mut ENVS[hartid] as *mut Environment) as usize;
-        println!("hartid {} mscratch {:x}", hartid, ad);
         cpu::write_mscratch(ad);
         LOCKER.unlock();
     }
@@ -149,7 +148,6 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                     ptr.add(2).write_volatile(1);
                     ptr.add(3).write_volatile(1);
                 }
-                // thread::schedule(env);
                 get_task_mgr().unwrap().schedule(env);
                 pc = waiting as usize;
             },
@@ -161,7 +159,6 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
             }
         }
     }
-    // println!("pc: {:x}", pc);
     pc
 }
 

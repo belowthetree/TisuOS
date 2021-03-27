@@ -1,15 +1,15 @@
-//! # 进程管理
-//! 管理进程，每一个核心进程队列的首元素默认为正在执行的进程，为了安全性，目前只允许进入中断对进程进行操作
-//! 进程的调度按顺序进行，暂未添加优先级等
+//! # 进程
+//! 进程作为程序标志，为程序保存基本信息
+//!
 //! 2020年12月12日 zg
 
 use alloc::{prelude::v1::*};
 use virtio::device;
 
 extern "C" {
-    fn switch_kernel_process(env : *mut u8) -> usize;
     fn process_exit();
 }
+
 /// ## ProcessState
 /// 进程目前分为三种状态：Waiting、Sleeping、Running
 /// 每个核心只有一个 Running 的进程，只有 Waiting 的进程能够被调度
@@ -30,18 +30,15 @@ impl ProcessState {
 }
 impl PartialEq for ProcessState{
     fn eq(&self, other: &Self) -> bool {
-        (self.clone() as usize) == (*other as usize)
+        (*self as usize) == (*other as usize)
     }
 }
 /// ## 进程信息结构体
 /// 保存环境、栈堆信息（预计增加唤醒时间、优先级）
 /// pages 属于进程占用的物理页
 pub struct Process{
-    pub satp : usize,
+    pub info : ProgramInfo,
     pub heap_list : *mut MemoryList,
-    pub state : ProcessState,
-    pub hartid : usize,
-    pub pid : usize,
     pub tid : Vec<usize>,
     pub is_kernel : bool,
 }
@@ -64,16 +61,18 @@ impl Process {
                 PID_CNT = PID_CNT % PROCESS_NUM_MAX;
                 PID_CNT += 1;
             }
-
+            let info = ProgramInfo{
+                pid: pid,
+                satp: satp,
+                state: TaskState::Running,
+                is_kernel: is_kernel,
+            };
             let rt = Process{
-                    satp : satp,
-                    pid : pid,
-                    heap_list : heap,
-                    state : ProcessState::Scheduling,
-                    is_kernel : is_kernel,
-                    tid : Vec::<usize>::new(),
-                    hartid : 0
-                };
+                info : info,
+                is_kernel : is_kernel,
+                tid : Vec::<usize>::new(),
+                heap_list: heap,
+            };
             Some(rt)
         }
     }
@@ -85,7 +84,7 @@ impl Process {
 /// 进程的释放发生在被从调度队列中剔除
 impl Drop for Process{
     fn drop(&mut self) {
-        SATP::from(self.satp).free_page_table();
+        SATP::from(self.info.satp).free_page_table();
         unsafe {(*self.heap_list).free(self.is_kernel);}
     }
 }
@@ -98,29 +97,19 @@ pub static PROCESS_NUM_MAX : usize = 100000;
 pub fn init(){
 }
 
-///
-/// ## 机器模式（中断）调用部分，严禁用户、内核权限下调用
-/// 
-
 /// 创建一个基本进程用于避免其它进程清空时报错
 pub fn start_init_process(){
-    println!("start init process");
     let mgr = super::get_task_mgr().unwrap();
-    println!("before create task");
     let id = mgr.create_task(init_process as usize, true).unwrap();
-    println!("after create task {}", id);
     mgr.start(id, 0);
-    panic!("after schdule {}", 0);
+    panic!("start init process fail {}", 0);
 }
 
 /// 初始化进程
 pub fn init_process(){
-    println!("init process");
     if fork() != 0 {
-        println!("enter device");
         device::run_interrupt();
     }
-    println!("after device fork");
     timer::set_next_interrupt(0);
     virtio::init();
     filesystem::init();
@@ -137,7 +126,7 @@ pub fn init_process(){
     // if fork() != 0{
     //     buffer::write_down_handler();
     // }
-    
+
     unsafe {
         loop {
             asm!("wfi"::::"volatile");
@@ -146,10 +135,9 @@ pub fn init_process(){
 }
 
 extern crate alloc;
-use crate::{desktop::plane::Plane, filesystem, interact::console_shell, interrupt::timer, libs::syscall::{fork}, memory::{allocator, page_table::PageTable, user_allocator::MemoryList}, sync::Mutex, virtio::{self, gpu_device}};
-// use syscall::fork;
-use core::{mem::size_of, ptr::null_mut};
+use crate::{desktop::plane::Plane, filesystem, interact::console_shell, interrupt::timer,
+    libs::syscall::{fork}, memory::{page_table::PageTable,
+    user_allocator::MemoryList},virtio::{self, gpu_device}};
 use page_table::{SATP};
-use crate::{interrupt::trap::{Environment},memory::page_table, uart, };
-
+use crate::{memory::page_table, uart};
 use super::{task_info::ProgramInfo, task_manager::TaskState};

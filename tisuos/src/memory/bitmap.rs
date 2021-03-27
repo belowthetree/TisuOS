@@ -3,7 +3,6 @@
 //! 
 //! 2021年1月25日 zg
 
-use core::ptr::null_mut;
 
 pub struct Bitmap {
     pub addr : *mut u8,
@@ -14,18 +13,8 @@ pub struct Bitmap {
 }
 
 impl Bitmap {
-    pub const fn empty()->Self {
-        Self {
-            addr : null_mut(),
-            total_cnt : 0,
-            free_cnt : 0,
-            use_cnt : 0,
-            search_idx : 0,
-        }
-    }
     /// ### 根据地址找到对应的元素然后释放
     pub fn free(&mut self, idx : usize) {
-        // println!("free {}", idx);
         assert!(self.is_bit_alloc(idx));
         if idx < self.search_idx {
             self.search_idx = idx;
@@ -55,9 +44,7 @@ impl Bitmap {
                 self.write_bitmap(i);
                 self.free_cnt -= 1;
                 self.use_cnt += 1;
-                if self.search_idx == i {
-                    self.search_idx += 1;
-                }
+                self.search_idx += 1;
                 return Some(i);
             }
         }

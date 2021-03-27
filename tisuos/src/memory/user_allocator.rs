@@ -4,7 +4,7 @@
 //! 2020年12月13日 zg
 // This is experimental and requires alloc_prelude as a feature
 use core::{mem::size_of, ptr::{null_mut}};
-use super::allocator;
+use super::{free, alloc};
 
 /// 链接同一个进程的所有堆内存
 #[allow(dead_code)]
@@ -17,20 +17,20 @@ pub struct MemoryList{
 impl MemoryList {
     /// 根据大小新建一个，结构体本身存放在内核堆内存里，用户所需在用户内存中申请
     pub fn new(size : usize, is_kernel : bool) -> *mut Self {
-        let rt = allocator::alloc(size_of::<Self>(), true).unwrap() as *mut Self;
+        let rt = alloc(size_of::<Self>(), true).unwrap() as *mut Self;
         if rt.is_null() {
             return null_mut();
         }
         unsafe {
             (*rt).next = null_mut();
             if is_kernel {
-                (*rt).phy_addr = allocator::alloc(size, true).unwrap();
+                (*rt).phy_addr = alloc(size, true).unwrap();
             }
             else {
-                (*rt).phy_addr = allocator::alloc(size, false).unwrap();
+                (*rt).phy_addr = alloc(size, false).unwrap();
             }
             if (*rt).phy_addr.is_null() {
-                allocator::free(rt as *mut u8);
+                free(rt as *mut u8);
                 null_mut()
             }
             else {
@@ -42,12 +42,12 @@ impl MemoryList {
     pub fn free(&mut self, is_kernel : bool){
         let a:*mut Self = self;
         if is_kernel{
-            allocator::free(self.phy_addr);
+            free(self.phy_addr);
         }
         else {
-            allocator::free(self.phy_addr);
+            free(self.phy_addr);
         }
-        allocator::free(a as *mut u8);
+        free(a as *mut u8);
         if !self.next.is_null() {
             unsafe {
                 (*self.next).free(is_kernel);

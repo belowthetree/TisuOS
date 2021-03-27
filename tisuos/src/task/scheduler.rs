@@ -19,7 +19,7 @@ impl Scheduler {
 }
 
 impl SchedulerOp for Scheduler {
-    fn schedule<T:super::task_manager::TaskPoolOp>(&mut self, task_pool :&mut T)->Option<usize> {
+    fn schedule<T:super::task_manager::TaskPoolBasicOp>(&mut self, task_pool :&mut T)->Option<usize> {
         let next;
         match self.method {
             ScheduleMethod::Rotation => {

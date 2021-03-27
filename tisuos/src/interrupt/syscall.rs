@@ -16,20 +16,18 @@ pub fn handler(env : &Environment) -> usize {
             panic!("shei gan diaoyong {}", 0);
         }
         4 => {
-            exec(env.regs[Register::A1.val()], env.regs[Register::A2.val()],
-            env.regs[Register::A3.val()] != 0);
+            rt = exec(env.regs[Register::A1.val()], env.regs[Register::A2.val()] != 0);
         }
         5 => {
             // 输出任务信息
         }
         6 => {
-            if let Some(addr) = allocator::alloc(env.regs[Register::A1.val()], true) {
-                rt = addr as usize;
-            }
+        }
+        7 => {
+            branch(env);
         }
         57 => {
             fork(env);
-            rt = 0;
         }
         60 => {
             println!("delete process");
@@ -51,13 +49,14 @@ pub fn handler(env : &Environment) -> usize {
 fn fork(env : &Environment){
     get_task_mgr().unwrap().fork_task(env);
 }
-#[allow(dead_code)]
-fn branch(func : usize, pid : usize)->Result<(), ()>{
-    // 从函数创建任务
-    Err(())
+
+fn branch(env : &Environment){
+    let mgr = get_task_mgr().unwrap();
+    let id = mgr.branch(env).unwrap();
+    mgr.set_task_state(id, TaskState::Sleeping);
 }
 
-fn exec(func : usize, satp : usize, is_kernel : bool)->usize {
+fn exec(func : usize, is_kernel : bool)->usize {
     let mgr = get_task_mgr().unwrap(); 
     let id = mgr.create_task(func, is_kernel).unwrap();
     id
@@ -65,7 +64,7 @@ fn exec(func : usize, satp : usize, is_kernel : bool)->usize {
 
 
 
-use crate::{memory::allocator};
+use crate::{task::task_manager::TaskState};
 use crate::uart;
 use crate::task::get_task_mgr;
 use super::trap::{Environment, Register};
