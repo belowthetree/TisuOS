@@ -69,7 +69,7 @@ impl Image {
     }
     pub fn open(path : &String)->Option<Self> {
         let mut file = File::open(path).unwrap();
-        file.open_flag(OpenFlag::Read.val()).ok();
+        file.open_flag(OpenFlag::Read.val()).unwrap();
         generate_image(file)
     }
     pub fn new(width : usize, height : usize, format : Format)->Self{

@@ -163,7 +163,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
 }
 
 
-use crate::{memory::{KERNEL_STACK_END, KERNEL_STACK_START}, sync::Mutex, task::{get_task_mgr}};
+use crate::{memory::config::{KERNEL_STACK_END, KERNEL_STACK_START}, sync::Mutex, task::{get_task_mgr}};
 
 use crate::{plic, uart, cpu};
 use super::{syscall, timer};

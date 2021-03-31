@@ -6,10 +6,6 @@
 use alloc::{prelude::v1::*};
 use virtio::device;
 
-extern "C" {
-    fn process_exit();
-}
-
 /// ## ProcessState
 /// 进程目前分为三种状态：Waiting、Sleeping、Running
 /// 每个核心只有一个 Running 的进程，只有 Waiting 的进程能够被调度
@@ -20,14 +16,7 @@ pub enum ProcessState{
     Scheduling = 1,
     Sleeping = 3,
 }
-impl ProcessState {
-    pub fn to_task_state(&self)->TaskState {
-        match self {
-            ProcessState::Scheduling => {TaskState::Running}
-            ProcessState::Sleeping => {TaskState::Sleeping}
-        }
-    }
-}
+
 impl PartialEq for ProcessState{
     fn eq(&self, other: &Self) -> bool {
         (*self as usize) == (*other as usize)
@@ -78,7 +67,7 @@ impl Process {
     }
 
     pub fn get_prog_info(&self)->ProgramInfo {
-        ProgramInfo::from_program(self)
+        self.info
     }
 }
 /// 进程的释放发生在被从调度队列中剔除
@@ -113,7 +102,6 @@ pub fn init_process(){
     timer::set_next_interrupt(0);
     virtio::init();
     filesystem::init();
-    gpu_device::reset(0);
     let rt = fork();
     if rt != 0 {
         println!("fork shell rt {}", rt);
@@ -137,7 +125,7 @@ pub fn init_process(){
 extern crate alloc;
 use crate::{desktop::plane::Plane, filesystem, interact::console_shell, interrupt::timer,
     libs::syscall::{fork}, memory::{page_table::PageTable,
-    user_allocator::MemoryList},virtio::{self, gpu_device}};
+    user_allocator::MemoryList},virtio::{self}};
 use page_table::{SATP};
 use crate::{memory::page_table, uart};
-use super::{task_info::ProgramInfo, task_manager::TaskState};
+use super::{task_info::{ProgramInfo, TaskState}};

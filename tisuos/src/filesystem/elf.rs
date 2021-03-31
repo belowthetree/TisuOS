@@ -28,7 +28,6 @@ pub fn load_elf(file : File) {
             let entry = elf.entry as usize;
             let id = exec(entry);
             let mgr = crate::task::get_task_mgr().unwrap();
-            let mem = get_memory_mgr().unwrap();
             for i in 0..num{
                 let offset = program_offset + i * phsize;
                 let phr = file.read(offset, phsize).unwrap();
@@ -38,7 +37,7 @@ pub fn load_elf(file : File) {
                     let mem_size = program.segment_size_in_memory as usize;
                     let file_size = program.segment_size_in_file as usize;
                     let num_page = (mem_size + PAGE_SIZE - 1) / PAGE_SIZE;
-                    let physic_addr = mem.user_page(num_page).unwrap() as usize;
+                    let physic_addr = alloc_user_page(num_page).unwrap() as usize;
                     if let Some(buffer) =
                             file.read(program.offset_in_file as usize, file_size){
                         (buffer.get_addr() as *mut u8).copy_to(physic_addr as *mut u8, file_size);
@@ -181,6 +180,6 @@ pub enum Machine{
 }
 
 use core::mem::size_of;
-use crate::{libs::syscall::exec, memory::get_memory_mgr, uart};
+use crate::{libs::syscall::exec, memory::alloc_user_page, uart};
 use crate::memory::config::PAGE_SIZE;
 use super::filetree::file::{File, OpenFlag};

@@ -4,8 +4,8 @@
 //! 2021年3月27日 zg
 
 use crate::sync::Mutex;
-
-use super::{MEMORY_END, config::{HEAP_START, KERNEL_PAGE_NUM, PAGE_SIZE}};
+use core::alloc::{GlobalAlloc, Layout};
+use super::{config::MEMORY_END, config::{HEAP_START, KERNEL_PAGE_NUM, PAGE_SIZE}, free, alloc};
 
 pub struct MemoryManager<T1 : PageOp, T2 : MemoryOp<T1>> {
     pub page : T1,
@@ -92,6 +92,7 @@ pub trait PageOp : Clone {
     /// ### 申请用户用页面
     fn alloc_user_page(&mut self, num : usize)->Option<*mut u8>;
     fn free_page(&mut self, addr : *mut u8);
+    fn page_size(&self)->usize;
     fn print(&self);
 }
 
@@ -103,3 +104,27 @@ pub trait MemoryOp<T:PageOp> {
     fn free_user_memory(&mut self, addr : *mut u8);
     fn print(&self);
 }
+
+
+/// ## 容器内存管理
+/// 实现 RUST 容器的内存分配 trait
+/// 所有内存在内核部分分配
+struct OSGlobalAlloc;
+unsafe impl GlobalAlloc for OSGlobalAlloc {
+    unsafe fn alloc(&self, layout : Layout) -> *mut u8{
+        alloc(layout.size(), true).unwrap()
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+        free(ptr);
+    }
+}
+
+#[global_allocator]
+static GA: OSGlobalAlloc = OSGlobalAlloc{};
+
+#[alloc_error_handler]
+pub fn alloc_error(layout : Layout) -> !{
+    panic!("Fail to alloc {} bytes with {} bytes alignment", layout.size(), layout.align());
+}
+

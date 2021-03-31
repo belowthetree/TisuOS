@@ -77,7 +77,7 @@ pub fn handler(){
     if let Some(pin) = claim(){
         match pin {
             1..=8 => {
-                device::interrupt_handler(pin as usize);
+                device::pending(pin as usize);
             }
             10 => {
                 console_input::run();

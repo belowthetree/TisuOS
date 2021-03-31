@@ -123,5 +123,5 @@ impl Sub for ScalePoint{
 
 use core::{ops::Sub, usize};
 
-use crate::virtio::gpu_device::{HEIGHT, WIDTH};
+use crate::virtio::config::{HEIGHT, WIDTH};
 

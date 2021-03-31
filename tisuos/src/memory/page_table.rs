@@ -100,7 +100,7 @@ pub struct PageTable{
 
 impl PageTable {
     pub fn new() ->&'static mut Self {
-        let addr = get_memory_mgr().unwrap().kernel_page(1).unwrap();
+        let addr = alloc_kernel_page(1).unwrap();
         unsafe {
             &mut *(addr as *mut Self)
         }
@@ -124,7 +124,6 @@ impl PageTable {
         | PageBit::Excute.val());
     }
     pub fn map(&mut self, virtual_addr : usize, physic_addr : usize, flag : u64){
-        let mgr = get_memory_mgr().unwrap();
         let vpn = [
             (virtual_addr >> 30) & 0x1ff,
             (virtual_addr >> 21) & 0x1ff,
@@ -132,7 +131,7 @@ impl PageTable {
         ];
         let pte_first = &mut self.entry[vpn[0]];
         if !pte_first.is_valid() {
-            let addr = mgr.kernel_page(1).unwrap();
+            let addr = alloc_kernel_page(1).unwrap();
             pte_first.set_node_ppn(addr as u64);
             pte_first.set_flag(flag & 
                 !PageBit::Read.val() & !PageBit::Write.val() & !PageBit::Excute.val());
@@ -142,7 +141,7 @@ impl PageTable {
         let pte_mid = &mut table_mid.entry[vpn[1]];
         
         if !pte_mid.is_valid() {
-            let addr = mgr.kernel_page(1).unwrap();
+            let addr = alloc_kernel_page(1).unwrap();
             pte_mid.set_node_ppn(addr as u64);
             pte_mid.set_flag(flag &
                 !PageBit::Read.val() & !PageBit::Write.val() & !PageBit::Excute.val());
@@ -156,7 +155,6 @@ impl PageTable {
         pte_final.set_valid();
     }
     pub fn free(&mut self){
-        let mgr = get_memory_mgr().unwrap();
         for i in 0..512{
             let pte = &self.entry[i];
             if pte.is_valid(){
@@ -168,18 +166,18 @@ impl PageTable {
                         for k in 0..512{
                             let pte = next_table.entry[k];
                             if pte.is_valid(){
-                                mgr.free_page(pte.get_ppn() as *mut u8);
+                                free_page(pte.get_ppn() as *mut u8);
                             }
                         }
-                        mgr.free_page(pte.get_ppn() as *mut u8);
+                        free_page(pte.get_ppn() as *mut u8);
                     }
                 }
-                mgr.free_page(pte.get_ppn() as *mut u8);
+                free_page(pte.get_ppn() as *mut u8);
             }
         }
         let addr = self as *mut Self;
 
-        mgr.free_page(addr as *mut u8);
+        free_page(addr as *mut u8);
     }
 }
 
@@ -191,14 +189,18 @@ pub fn make_satp(pt : usize, asid : usize) -> usize{
 
 
 /// ## 将内核代码部分进行映射
-/// 因为进程返回调用了内核中的代码
+/// 目前内核任务可能会访问所有内存，而用户任务结束时调用了内核区域 exit 函数
 pub fn map_kernel_area(pt : &mut PageTable, is_kernel : bool){
     unsafe {
         if is_kernel{
             let st = MEMORY_START;
-            let ed = MEMORY_END;
+            let ed = KERNEL_STACK_START;
             for addr in (st..ed).step_by(PAGE_SIZE){
                 pt.map_kernel(addr, addr);
+            }
+            let med = MEMORY_END;
+            for addr in (ed..med).step_by(PAGE_SIZE){
+                pt.map_kernel_data(addr,addr);
             }
             for i in 0..10{
                 let addr =0x1000_0000 + i * PAGE_SIZE;
@@ -220,4 +222,5 @@ pub fn map_kernel_area(pt : &mut PageTable, is_kernel : bool){
     }
 }
 
-use super::{MEMORY_END, MEMORY_START, config::PAGE_SIZE, get_memory_mgr};
+use super::{config::{KERNEL_STACK_START, MEMORY_START},
+    MEMORY_END, alloc_kernel_page, config::PAGE_SIZE, free_page};

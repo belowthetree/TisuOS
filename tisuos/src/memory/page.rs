@@ -136,6 +136,10 @@ impl PageOp for PageManager {
 		}
     }
 
+    fn page_size(&self)->usize {
+		self.page_size
+    }
+
     fn print(&self) {
 		unsafe {
 			let mut cnt = 0;

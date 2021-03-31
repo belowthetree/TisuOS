@@ -3,7 +3,7 @@
 //! 2021年3月23日 zg
 
 
-use super::{task_manager::{ScheduleMethod, SchedulerOp, TaskState}};
+use super::{task_manager::{ScheduleMethod, SchedulerOp}, task_info::TaskState};
 
 
 pub struct Scheduler{

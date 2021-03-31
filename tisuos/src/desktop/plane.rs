@@ -31,7 +31,7 @@ pub struct Plane {
 impl Plane {
     pub fn new()->Self {
         let mut file = File::open(&"0/img/mac.bmp".to_string()).unwrap();
-        file.open_flag(OpenFlag::Read.val()).ok();
+        file.open_flag(OpenFlag::Read.val()).unwrap();
         let mut image = generate_image(file).unwrap();
         image.resize(WIDTH, HEIGHT);
         let mut rt = Self {
@@ -47,7 +47,7 @@ impl Plane {
         rt
     }
     pub fn draw(&mut self) {
-        if !self.invalid.get() {
+        if !self.invalid.pop() {
             return;
         }
         self.background.draw_override();
@@ -235,7 +235,7 @@ impl Plane {
 
 use crate::{filesystem::{filetree::file::{File, OpenFlag}, image::bmp::generate_image},
     graphic::{colorblock::ColorBlock}, libs::shape::Position, sync::{Bool},
-    virtio::{gpu_device::{HEIGHT, WIDTH, invalid}, input::{input_buffer::{get_key_press, get_key_release,
+    virtio::{config::{HEIGHT, WIDTH}, device::invalid, input::{input_buffer::{get_key_press, get_key_release,
         get_mouse_position, get_scroll}, keyboard::Key}}};
 use alloc::{prelude::v1::*};
 use super::{content::ContentType, dock::{Dock, DockFuncType}, keyboard::{Keyboard}, mouse::{Mouse}, window::{Window}};

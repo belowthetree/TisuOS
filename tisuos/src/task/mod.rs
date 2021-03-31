@@ -5,13 +5,11 @@
 //! 
 //! 2021年1月1日 zg
 
-#![allow(dead_code)]
-
 pub mod process;
 pub mod thread;
 pub mod scheduler;
 
-mod task_info;
+pub mod task_info;
 pub mod task_manager;
 pub mod task_pool;
 
@@ -38,7 +36,7 @@ pub fn get_task_mgr()->Option<&'static mut TaskManager<Scheduler, TaskPool>> {
     }
 }
 
-
+#[allow(dead_code)]
 pub fn push_pipe(tid : usize, val : usize) {
     unsafe {
         if let Some(pipe) = &mut PIPE {
@@ -55,6 +53,7 @@ pub fn push_pipe(tid : usize, val : usize) {
     }
 }
 
+#[allow(dead_code)]
 pub fn pop_pipe(tid : usize)->Option<usize> {
     unsafe {
         if let Some(pipe) = &mut PIPE {

@@ -152,7 +152,8 @@ impl Dock {
 
 
 // use crate::uart;
-use crate::{filesystem::image::image::Image, graphic::colorblock::ColorBlock, libs::{graphic::Pixel, shape::{Area, Position}}, virtio::gpu_device::{HEIGHT, WIDTH}};
+use crate::{filesystem::image::image::Image, graphic::colorblock::ColorBlock,
+    libs::{graphic::Pixel, shape::{Area, Position}}, virtio::config::{HEIGHT, WIDTH}};
 use alloc::prelude::v1::*;
 use super::{button::Button, mouse::MouseEvent, plane::PlaneEvent};
 

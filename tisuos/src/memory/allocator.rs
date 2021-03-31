@@ -38,7 +38,7 @@ impl<T:PageOp> Allocator<T> {
         let bit_addr;
         let struct_addr;
         let free_cnt;
-        let total_size = num_alloc * PAGE_SIZE;
+        let total_size = num_alloc * self.page_manager.page_size();
         let struct_size = (total_size / size + 7) / 8 + size_of::<MemoryPool>();
         let phy_addr ;
         if is_kernel {
@@ -116,12 +116,13 @@ impl<T:PageOp> Allocator<T> {
     }
 
     fn decide_page_num(&self, size : usize) -> usize{
+        let page_size = self.page_manager.page_size();
         let too_big = MEMORY_TOO_BIG;
         if size > too_big {
-            (size + PAGE_SIZE - 1) / PAGE_SIZE
+            (size + page_size - 1) / page_size
         }
         else {
-            (size * 4 + PAGE_SIZE - 1) / PAGE_SIZE
+            (size * 4 + page_size - 1) / page_size
         }
     }
 
@@ -309,9 +310,8 @@ impl MemoryPool {
     }
 }
 
-const MEMORY_TOO_BIG : usize = PAGE_SIZE;
-const MEMORY_SIZE_INSIDE : usize = PAGE_SIZE / 20;
-
+const MEMORY_TOO_BIG : usize = 4096;
+const MEMORY_SIZE_INSIDE : usize = 256;
 
 pub fn test(){
     println!("test global_allocator alloc");
@@ -405,31 +405,9 @@ pub fn test(){
     println!();
 }
 
-/// ## 容器内存管理
-/// 实现 RUST 容器的内存分配 trait
-/// 所有内存在内核部分分配
-struct OSGlobalAlloc;
-unsafe impl GlobalAlloc for OSGlobalAlloc {
-    unsafe fn alloc(&self, layout : Layout) -> *mut u8{
-        get_memory_mgr().unwrap().alloc_memory(layout.size(), true).unwrap()
-    }
 
-    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        get_memory_mgr().unwrap().free_kernel_memory(ptr);
-    }
-}
-
-#[global_allocator]
-static GA: OSGlobalAlloc = OSGlobalAlloc{};
-
-#[alloc_error_handler]
-pub fn alloc_error(layout : Layout) -> !{
-    panic!("Fail to alloc {} bytes with {} bytes alignment", layout.size(), layout.align());
-}
-
-use core::{alloc::{GlobalAlloc, Layout}, mem::size_of};
+use core::{mem::size_of};
 use crate::{uart};
-use super::{bitmap::{Bitmap}, config::PAGE_SIZE, mem_manager::{MemoryOp, PageOp},
-alloc, free, print};
-use super::get_memory_mgr;
+use super::{bitmap::{Bitmap}, mem_manager::{MemoryOp, PageOp},
+    alloc, free, print};
 use alloc::prelude::v1::*;

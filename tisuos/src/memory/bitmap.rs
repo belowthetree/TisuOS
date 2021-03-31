@@ -38,6 +38,7 @@ impl Bitmap {
             self.write_bitmap(i);
         }
     }
+
     pub fn alloc_bitmap(&mut self) ->Option<usize> {
         for i in self.search_idx..self.total_cnt{
             if !self.is_bit_alloc(i) {
@@ -50,6 +51,7 @@ impl Bitmap {
         }
         None
     }
+
     fn write_bitmap(&mut self, idx : usize){
         unsafe {
             let p = self.addr.add(idx / 8);

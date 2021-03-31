@@ -49,7 +49,7 @@ impl Bool {
         }
     }
     /// ### 获取并置为 unlock（false）
-    pub fn get(&mut self)->bool {
+    pub fn pop(&mut self)->bool {
         unsafe {
             let state : MutexState;
             asm!("amoswap.w.aq $0, $1, ($2)\n" : "=r"(state) : "r"(0), "r"(self) :: "volatile");
@@ -59,11 +59,29 @@ impl Bool {
             }
         }
     }
+
+    pub fn get_val(&mut self)->bool {
+        unsafe {
+            let state : MutexState;
+            asm!("amoor.w.aq $0, $1, ($2)" : "=r"(state) : "r"(0), "r"(self) :: "volatile");
+            match state {
+                MutexState::Unlock => {false}
+                MutexState::Lock => {true}
+            }
+        }
+    }
     /// ### 置为 lock（true）
     pub fn set_true(&mut self) {
         unsafe {
             let state = &mut self.state;
             asm!("amoswap.w.rl zero, $1, ($0)" :: "r"(state), "r"(1) :: "volatile");
+        }
+    }
+
+    pub fn set_false(&mut self) {
+        unsafe {
+            let state = &mut self.state;
+            asm!("amoswap.w.rl zero, $1, ($0)" :: "r"(state), "r"(0) :: "volatile");
         }
     }
 }

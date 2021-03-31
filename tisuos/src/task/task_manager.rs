@@ -1,32 +1,32 @@
 //! # 任务管理
 //! 管理任务系统调度，包含调度算法
+//! 
 //! 2021年3月23日 zg
 
 
-use crate::{interrupt::trap::Environment, libs::help::{switch_kernel, switch_user}, memory::page_table::SATP, sync::Mutex};
+use crate::{interrupt::trap::Environment, libs::help::{switch_kernel, switch_user},
+    memory::page_table::{SATP}, sync::Mutex};
 use alloc::prelude::v1::*;
-use super::{task_info::{ExecutionInfo, ProgramInfo}};
+use super::{task_info::{ExecutionInfo, ProgramInfo, TaskState}};
 
 pub enum ScheduleMethod{
     Rotation,
 }
 
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum TaskState {
-    Running,
-    Waiting,
-    Sleeping,
-}
-
 /// ## 任务管理器
+/// 任务管理器假设任务存在两种状态：程序、执行。
+/// 程序代表任务的整体，执行则是具体的执行、调度单位
+/// 所以任务管理器应当支持针对程序及执行单位的对话操作
 pub struct TaskManager<T1, T2> {
     scheduler : T1,
     task_pool : T2,
     mutex : Mutex,
 }
 
-/// ## 调度器功能实现
-/// 原则上只允许通过任务 ID 进行交互，不得引用、复制以节省处理时间防止同步错误
+/// ## 任务管理器基本功能实现
+/// ID 分为任务 ID、程序 ID
+/// 原则上只允许通过任务 ID 进行交互。而管理器对外则通过 Environment 或 hartid 交互
+/// 基本的信息交流仅限于程序信息（ProgramInfo）、执行信息（ExecutionInfo）
 impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
     pub const fn new(sche : T1, pool : T2)->Self {
         Self {
@@ -41,7 +41,7 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
         self.task_pool.set_task_exec(id, |info|{
             info.state = TaskState::Running;
             info.env.hartid = hartid;
-        }).ok();
+        }).unwrap();
         self.switch_to(&info);
     }
 
@@ -53,7 +53,7 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
             self.task_pool.set_task_exec(cur, |info|{
                 info.state = TaskState::Waiting;
                 info.env = env.clone();
-            }).ok();
+            }).unwrap();
         }
         self.mutex.lock();
         let next = self.scheduler.schedule(&mut self.task_pool);
@@ -62,15 +62,11 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
             self.task_pool.set_task_exec(next, |info|{
                 info.state = TaskState::Running;
                 info.env.hartid = env.hartid;
-            }).ok();
+            }).unwrap();
             self.mutex.unlock();
             self.switch_to(&info);
         }
         self.mutex.unlock();
-    }
-
-    pub fn task_exit(&mut self, hartid : usize) {
-        self.task_pool.remove_task(hartid).ok();
     }
     /// ### 创建任务并返还任务 ID
     pub fn create_task(&mut self, func : usize, is_kernel : bool)->Option<usize>{
@@ -92,7 +88,7 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
             pt.map_user_code(virtual_addr, physic_addr);
         }
     }
-
+    #[allow(dead_code)]
     pub fn map_data(&mut self, id : usize, virtual_addr : usize, physic_addr : usize) {
         let info = self.task_pool.get_task_prog(id).unwrap();
         let satp = SATP::from(info.satp);
@@ -105,23 +101,24 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
         }
     }
 
+    pub fn task_exit(&mut self, hartid : usize) {
+        self.task_pool.remove_task(hartid).unwrap();
+    }
+
     pub fn program_exit(&mut self, hartid : usize) {
         let id = self.task_pool.find(|info|{
             info.state == TaskState::Running && info.env.hartid == hartid
         }).unwrap();
         let info = self.task_pool.get_task_exec(id).unwrap();
-        let info = self.task_pool.get_task_prog(info.pid).unwrap();
-        self.task_pool.remove_task(info.pid).ok();
+        self.task_pool.remove_program(info.pid).unwrap();
+        // let info = self.task_pool.get_task_prog(info.pid).unwrap();
+        // self.task_pool.remove_task(info.pid).ok();
     }
-
-    pub fn remove_program(&mut self, id : usize) {
-        self.task_pool.remove_program(id).ok();
-    }
-
+    #[allow(dead_code)]
     pub fn get_task_exec_info(&mut self, id : usize)->Option<ExecutionInfo> {
         self.task_pool.get_task_exec(id)
     }
-
+    #[allow(dead_code)]
     pub fn get_current_task(&mut self, env : &Environment)->usize {
         self.task_pool.find(|info|{
             info.state == TaskState::Running && info.env.hartid == env.hartid
@@ -147,7 +144,7 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
     pub fn set_task_state(&mut self, id : usize, state : TaskState) {
         self.task_pool.set_task_exec(id, |info| {
             info.state = state;
-        }).ok();
+        }).unwrap();
     }
 }
 

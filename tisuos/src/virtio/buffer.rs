@@ -247,5 +247,5 @@ fn find_buffer<'a>(idx : usize)->Option<&'a mut Buffer>{
 
 use alloc::{prelude::v1::*};
 use crate::uart;
-use super::block_device::{sync_read, sync_write};
+use super::device::{sync_read, sync_write};
 

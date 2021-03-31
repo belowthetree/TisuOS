@@ -4,7 +4,15 @@
 
 use crate::{interrupt::trap::Environment, sync::Mutex};
 use alloc::{collections::VecDeque};
-use super::{process::Process, task_manager::TaskState, thread::Thread};
+
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum TaskState {
+    Running,
+    Waiting,
+    Sleeping,
+}
+
 
 #[derive(Debug)]
 pub struct ExecutionInfo {
@@ -16,6 +24,7 @@ pub struct ExecutionInfo {
     pub env : Environment,
 }
 
+#[derive(Clone, Copy)]
 pub struct ProgramInfo {
     pub pid : usize,
     pub satp : usize,
@@ -23,56 +32,6 @@ pub struct ProgramInfo {
     pub is_kernel : bool,
 }
 
-impl ExecutionInfo {
-    pub fn default()->Self {
-        Self {
-            pid: 0,
-            tid: 0,
-            state: TaskState::Waiting,
-            is_kernel: false,
-            stack_top: 0 as *mut u8,
-            env: Environment::new(),
-        }
-    }
-    
-    pub fn from_thread(thread : &Thread)->Self {
-        Self {
-            pid : thread.pid,
-            tid : thread.tid,
-            state : thread.state.to_task_state(),
-            is_kernel : thread.is_kernel,
-            stack_top : thread.stack_top,
-            env : thread.env,
-        }
-    }
-
-    pub fn from_env(env : &Environment)->Self {
-        let mut rt = Self::default();
-        rt.env = *env;
-        rt
-    }
-}
-
-impl ProgramInfo {
-    pub fn default()->Self {
-        Self {
-            pid: 0,
-            satp : 0,
-            state: TaskState::Waiting,
-            is_kernel: false,
-        }
-    }
-    
-    pub fn from_program(process : &Process)->Self {
-        let info = &process.info;
-        Self {
-            pid : info.pid,
-            satp : info.satp,
-            state : info.state,
-            is_kernel : process.is_kernel,
-        }
-    }
-}
 
 pub struct PipeUnit {
     pub tid : usize,

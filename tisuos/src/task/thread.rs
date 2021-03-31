@@ -47,6 +47,9 @@ pub struct Thread{
     pub is_kernel : bool,
 }
 
+/// ## 线程功能
+/// fork 拷贝原线程栈内容然后创建新的分支
+/// branch 直接根据传入地址（默认是原线程的第二个参数）创建新的线程
 impl Thread {
     pub fn new(func : usize, p : &Process)->Option<Self>{
         let mut env = Environment::new();
@@ -61,7 +64,7 @@ impl Thread {
         }
         let satp = SATP::from(p.info.satp);
         let pt = satp.get_page_table().unwrap();
-        page_table::map_kernel_area(&mut *pt, p.is_kernel);
+        page_table::map_kernel_area(pt, p.is_kernel);
         Thread::map_stack(pt, stack_bottom, p.is_kernel);
 
         stack_top = stack_bottom as usize + PAGE_SIZE * STACK_PAGE_NUM;
@@ -145,7 +148,7 @@ impl Thread {
         Thread::map_stack(pt, stack_bottom, src_th.is_kernel);
 
         stack_top = stack_bottom as usize + PAGE_SIZE * STACK_PAGE_NUM;
-        env.epc = src_th.env.regs[Register::A0.val()];
+        env.epc = src_th.env.regs[Register::A1.val()];
         println!("thread branch src tid {} stack {:x} sp {:x}, new stack {:x} sp {:x} tid {}",
         src_th.tid, src_th.stack_top as usize, src_th.env.regs[Register::SP.val()], stack_top,
             env.regs[Register::SP.val()], tid);
@@ -191,9 +194,17 @@ impl Thread {
     }
 }
 
+/// ## 信息相关操作
 impl Thread {
     pub fn get_exec_info(&self)->ExecutionInfo {
-        ExecutionInfo::from_thread(self)
+        ExecutionInfo {
+            pid: self.pid,
+            tid: self.tid,
+            state: self.state.to_task_state(),
+            is_kernel: self.is_kernel,
+            stack_top: self.stack_top,
+            env: self.env,
+        }
     }
 
     pub fn set_exec_info(&mut self, info : &ExecutionInfo) {
@@ -229,7 +240,7 @@ use crate::{interrupt::trap::{Environment, Register}, memory::{alloc_kernel_page
     uart};
 
 use super::{delete_pipe, task_info::{ExecutionInfo}, process::{Process, STACK_PAGE_NUM},
-    task_manager::TaskState};
+    task_info::TaskState};
 
 
 

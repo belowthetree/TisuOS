@@ -13,7 +13,7 @@ pub struct Block<T>{
 #[allow(dead_code)]
 impl<T1:Copy> Block<T1> {
     pub fn new(size : usize)->Block<T1>{
-        let addr = get_memory_mgr().unwrap().alloc_memory(
+        let addr = alloc(
             size * size_of::<T1>(), true).unwrap() as *mut T1;
         Block {
             addr : addr,
@@ -87,11 +87,11 @@ impl<T1:Copy> Block<T1> {
 
 impl<T> Drop for Block<T>{
     fn drop(&mut self) {
-        get_memory_mgr().unwrap().free_kernel_memory(self.addr as *mut u8);
+        free(self.addr as *mut u8);
     }
 }
 
 // use crate::uart;
 use core::{cmp::min, mem::size_of};
 
-use super::get_memory_mgr;
+use super::{free, alloc};

@@ -21,8 +21,8 @@ pub static mut MANAGER : Option<Vec<Mgr>> = None;
 pub fn init(){
     unsafe {
         let mut infos = Vec::<Mgr>::new();
-        if let Some(blocks) = &mut BLOCKS{
-            for idx in 0..blocks.len(){
+        if let Some(dev) = &mut DEVICES{
+            for idx in 0..dev.block_device.len(){
                 let info = BlockInfo::new(idx);
                 match info.get_type() {
                     FAT32 => {
@@ -46,7 +46,7 @@ pub fn init(){
 }
 
 
-use crate::{uart, virtio::block_device::BLOCKS};
+use crate::{uart, virtio::{device::DEVICES}};
 use alloc::prelude::v1::*;
 use block_info::BlockInfo;
 use filetree::file;

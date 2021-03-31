@@ -5,7 +5,8 @@
 
 use crate::{interrupt::trap::Environment, sync::Mutex};
 
-use super::{task_info::ExecutionInfo, process::Process, task_manager::{TaskPoolBasicOp, TaskState}, thread::Thread};
+use super::{task_info::{ExecutionInfo, TaskState}, process::Process, task_manager::{TaskPoolBasicOp},
+    thread::Thread};
 use alloc::{prelude::v1::*};
 use alloc::collections::BTreeMap;
 
@@ -87,6 +88,7 @@ impl TaskPoolBasicOp for TaskPool {
         self.thread_lock.unlock();
         self.process_lock.lock();
         let rt = self.process.get(&id).unwrap().get_prog_info();
+        self.process_lock.unlock();
         Some(rt)
     }
 
@@ -107,7 +109,8 @@ impl TaskPoolBasicOp for TaskPool {
         }
     }
 
-    fn find<F>(&mut self, f : F)->Option<usize> where F : Fn(&ExecutionInfo)->bool {self.thread_lock.lock();
+    fn find<F>(&mut self, f : F)->Option<usize> where F : Fn(&ExecutionInfo)->bool {
+        self.thread_lock.lock();
         for (tid, t) in self.thread.iter() {
             if f(&t.get_exec_info()) {
                 self.thread_lock.unlock();
@@ -142,9 +145,13 @@ impl TaskPoolBasicOp for TaskPool {
             let mut info = th.get_exec_info();
             f(&mut info);
             th.set_exec_info(&info);
+            self.thread_lock.unlock();
+            Ok(())
         }
-        self.thread_lock.unlock();
-        Err(())
+        else {
+            self.thread_lock.unlock();
+            Err(())
+        }
     }
 
     fn remove_task(&mut self, id : usize)->Result<(), ()> {

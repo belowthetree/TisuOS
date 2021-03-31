@@ -12,6 +12,7 @@
     const_fn,
     global_asm,
     map_first_last,
+    const_in_array_repeat_expressions,
 )]
 
 global_asm!(include_str!("asm/boot.S"));

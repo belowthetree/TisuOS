@@ -4,7 +4,7 @@
 //! 
 //! 2021年1月25日 zg
 
-use self::{allocator::Allocator, config::{KERNEL_PAGE_NUM, PAGE_SIZE}, mem_manager::MemoryManager, page::PageManager};
+use self::{allocator::Allocator, config::{HEAP_START, KERNEL_PAGE_NUM, MEMORY_END, PAGE_SIZE}, mem_manager::MemoryManager, page::PageManager};
 
 mod allocator;
 mod page;
@@ -24,13 +24,6 @@ pub fn init(){
 		MEM_MANAGER = Some(MemoryManager::new());
 	}
 	// test();
-}
-
-pub fn get_memory_mgr()->Option<&'static mut MemoryManager<PageManager, Allocator<PageManager>>> {
-	unsafe {
-		if let Some(mgr) = &mut MEM_MANAGER {Some(mgr)}
-		else{None}
-	}
 }
 
 #[allow(dead_code)]
@@ -98,23 +91,4 @@ pub fn free(addr : *mut u8) {
 		}
 		else{panic!("Error {}", 0)}
 	}
-}
-
-#[allow(dead_code)]
-extern "C" {
-    pub static TEXT_START: usize;
-	pub static TEXT_END: usize;
-	pub static DATA_START: usize;
-	pub static DATA_END: usize;
-	pub static RODATA_START: usize;
-	pub static RODATA_END: usize;
-	pub static BSS_START: usize;
-	pub static BSS_END: usize;
-	pub static KERNEL_STACK_START: usize;
-	pub static KERNEL_STACK_END: usize;
-	pub static HEAP_START: usize;
-    pub static HEAP_SIZE: usize;
-    pub static MEMORY_START: usize;
-	pub static MEMORY_END: usize;
-	pub static TRAP_STACK_END : usize;
 }

@@ -63,8 +63,6 @@ fn exec(func : usize, is_kernel : bool)->usize {
 }
 
 
-
-use crate::{task::task_manager::TaskState};
-use crate::uart;
+use crate::{task::task_info::TaskState, uart};
 use crate::task::get_task_mgr;
 use super::trap::{Environment, Register};

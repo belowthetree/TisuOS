@@ -3,11 +3,14 @@
 //! 2020年11月 zg
 
 pub mod device;
-pub mod block_device;
-pub mod gpu_device;
 pub mod input;
 pub mod buffer;
-use input::input_device;
+pub mod config;
+mod header;
+mod queue;
+mod block;
+mod gpu;
+// use input::input_device;
 
 pub fn init() {
     device::init();

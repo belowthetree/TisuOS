@@ -31,7 +31,7 @@ pub fn list_thread(){
         make_syscall(5, 0, 0, 0, 0);
     }
 }
-
+#[allow(dead_code)]
 pub fn branch(func : usize)->usize {
     unsafe {
         make_syscall(7, func, 0, 0, 0)
