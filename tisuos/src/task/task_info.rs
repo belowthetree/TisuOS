@@ -2,7 +2,7 @@
 //! 
 //! 2021年2月6日 zg
 
-use crate::{interrupt::trap::Environment, sync::Mutex};
+use crate::{interrupt::trap::Environment, sync::mutex::Mutex};
 use alloc::{collections::VecDeque};
 
 

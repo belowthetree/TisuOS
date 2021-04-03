@@ -48,7 +48,7 @@ impl<T:PageOp> Allocator<T> {
             phy_addr = self.page_manager.alloc_user_page(num_alloc).unwrap();
         }
         // 块的粒度较大时另外存放结构体
-        if size >= MEMORY_SIZE_INSIDE {
+        if size > struct_size * 2 {
             if is_kernel {
                 struct_addr = self.alloc(struct_size, true).unwrap()
             }

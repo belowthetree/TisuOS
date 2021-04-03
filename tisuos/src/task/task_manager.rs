@@ -5,7 +5,7 @@
 
 
 use crate::{interrupt::trap::Environment, libs::help::{switch_kernel, switch_user},
-    memory::page_table::{SATP}, sync::Mutex};
+    memory::page_table::{SATP}, sync::mutex::Mutex};
 use alloc::prelude::v1::*;
 use super::{task_info::{ExecutionInfo, ProgramInfo, TaskState}};
 

@@ -19,7 +19,7 @@ pub struct Request {
 	pub data:   *mut u8,
 	pub status: u8,
 	pub waiter_id : usize,
-	pub lock : sync::Mutex,
+	pub lock : Mutex,
 }
 
 #[derive(Copy, Clone)]
@@ -284,6 +284,6 @@ pub fn run_interrupt(){
 
 
 use alloc::{prelude::v1::*};
-use crate::{libs::{graphic::Pixel, shape::Rect}, sync::{self}};
+use crate::{libs::{graphic::Pixel, shape::Rect}, sync::{mutex::Mutex}};
 use super::{block::Block, gpu::GPU, header:: VirtHeader,
     input::input::{InputDevice}, queue::{Header}};

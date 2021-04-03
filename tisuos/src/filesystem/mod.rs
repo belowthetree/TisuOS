@@ -12,7 +12,9 @@ mod require;
 mod implement;
 use format::fat32;
 
+#[allow(dead_code)]
 pub enum Mgr {
+    None,
     FAT(FATManger),
 }
 

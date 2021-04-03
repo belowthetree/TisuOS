@@ -3,7 +3,7 @@
 //! 2021年3月23日 zg
 
 
-use crate::{interrupt::trap::Environment, sync::Mutex};
+use crate::{interrupt::trap::Environment, sync::mutex::Mutex};
 
 use super::{task_info::{ExecutionInfo, TaskState}, process::Process, task_manager::{TaskPoolBasicOp},
     thread::Thread};

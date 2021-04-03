@@ -190,6 +190,7 @@ pub fn get_directory(block_idx : usize, cluster : usize) ->Option<Directory> {
             Mgr::FAT(fat) => {
                 fat.get_directory(cluster)
             }
+            _ => {None}
         }
     }
     else{

@@ -234,7 +234,7 @@ impl Plane {
 
 
 use crate::{filesystem::{filetree::file::{File, OpenFlag}, image::bmp::generate_image},
-    graphic::{colorblock::ColorBlock}, libs::shape::Position, sync::{Bool},
+    graphic::{colorblock::ColorBlock}, libs::shape::Position, sync::mutex::{Bool},
     virtio::{config::{HEIGHT, WIDTH}, device::invalid, input::{input_buffer::{get_key_press, get_key_release,
         get_mouse_position, get_scroll}, keyboard::Key}}};
 use alloc::{prelude::v1::*};

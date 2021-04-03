@@ -9,6 +9,7 @@ pub fn read_content(block_idx : usize, start_cluster : usize, idx : usize, len :
             Mgr::FAT(fat) => {
                 fat.read(block_idx, start_cluster, idx, len)
             }
+            _ => {None}
         }
     }
     else{
@@ -22,6 +23,7 @@ pub fn write_content(block_idx : usize, start_cluster : usize, idx : usize, len 
             Mgr::FAT(fat) => {
                 fat.write(block_idx, start_cluster, idx, len, ctx);
             }
+            _ => {}
         }
     }
 }

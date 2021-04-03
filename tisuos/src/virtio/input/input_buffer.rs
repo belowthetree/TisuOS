@@ -24,6 +24,42 @@ static mut KEY_RELEASE : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE];
 static mut SCROLL : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE]; // 1 是上滑，2 是下滑
 static mut DELEGATE : Option<Vec<fn()>> = None;
 
+struct InputBuffer<T> {
+    write_idx : usize,
+    read_idx : usize,
+    buffer : [T;QUEUE_SIZE],
+}
+
+impl<T : Copy> InputBuffer<T> {
+    pub fn new(val : T)->Self {
+        Self{
+            write_idx: 0,
+            read_idx: 0,
+            buffer: [val;QUEUE_SIZE],
+        }
+    }
+
+    pub fn read(&mut self)->Option<T> {
+        if self.read_idx != self.write_idx {
+            let idx = self.read_idx;
+            self.read_idx = (self.read_idx + 1) % QUEUE_SIZE;
+            Some(self.buffer[idx])
+        }
+        else{
+            None
+        }
+    }
+
+    pub fn write(&mut self, val : T) {
+        self.buffer[self.write_idx] = val;
+        self.write_idx = (self.write_idx + 1) % QUEUE_SIZE;
+    }
+
+    pub fn read_cur(&mut self)->T {
+        self.buffer[(self.write_idx + QUEUE_SIZE - 1) % QUEUE_SIZE]
+    }
+}
+
 pub fn init(){
     unsafe {
         DELEGATE = Some(Vec::<fn()>::new());

@@ -4,7 +4,7 @@
 
 use core::mem::size_of;
 
-use crate::{memory::{alloc_kernel_page, config::PAGE_SIZE, free, alloc}, sync::{Bool, Mutex}};
+use crate::{memory::{alloc_kernel_page, config::PAGE_SIZE, free, alloc}, sync::mutex::{Bool, Mutex}};
 
 use super::{header::VirtHeader,
 	queue::{DescFlag, Header, VIRTIO_BLK_F_RO, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT,

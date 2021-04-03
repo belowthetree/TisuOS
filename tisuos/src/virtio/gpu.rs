@@ -5,7 +5,7 @@
 #![allow(dead_code)]
 use core::{cmp::min, mem::size_of};
 
-use crate::{libs::{graphic::Pixel, shape::Rect}, memory::{alloc, alloc_kernel_page, config::PAGE_SIZE, free}, sync::{Bool, Mutex}};
+use crate::{libs::{graphic::Pixel, shape::Rect}, memory::{alloc, alloc_kernel_page, config::PAGE_SIZE, free}, sync::mutex::{Bool, Mutex}};
 
 use super::{header::VirtHeader, queue::{DescFlag, VIRTIO_DESC_F_NEXT, VIRTIO_RING_SIZE, VirtQueue}};
 

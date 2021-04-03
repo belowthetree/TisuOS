@@ -3,15 +3,15 @@
 //! 
 //! 2021年3月27日 zg
 
-use crate::sync::Mutex;
+
 use core::alloc::{GlobalAlloc, Layout};
+use crate::sync::content::ContentMutex;
+
 use super::{config::MEMORY_END, config::{HEAP_START, KERNEL_PAGE_NUM, PAGE_SIZE}, free, alloc};
 
 pub struct MemoryManager<T1 : PageOp, T2 : MemoryOp<T1>> {
-    pub page : T1,
-    pub memory : T2,
-    memory_lock : Mutex,
-    page_lock : Mutex,
+    page : ContentMutex<T1>,
+    memory : ContentMutex<T2>,
 }
 
 impl<T1 : PageOp + Clone + Copy, T2 : MemoryOp<T1>> MemoryManager<T1, T2> {
@@ -20,65 +20,51 @@ impl<T1 : PageOp + Clone + Copy, T2 : MemoryOp<T1>> MemoryManager<T1, T2> {
         let page = T1::new(unsafe{HEAP_START},
             user_heap, unsafe{MEMORY_END}, PAGE_SIZE);
         Self {
-            page: page,
-            memory: T2::new(&mut page.clone()),
-            memory_lock : Mutex::new(),
-            page_lock : Mutex::new(),
+            page: ContentMutex::new(page),
+            memory: ContentMutex::new(T2::new(&mut page.clone())),
         }
     }
 
     pub fn kernel_page(&mut self, num : usize)->Option<*mut u8> {
-        self.page_lock.lock();
-        let rt = self.page.alloc_kernel_page(num);
-        self.page_lock.unlock();
-        rt
+        let mut page = self.page.lock();
+        (*page).alloc_kernel_page(num)
     }
 
     pub fn user_page(&mut self, num : usize)->Option<*mut u8> {
-        self.page_lock.lock();
-        let rt = self.page.alloc_user_page(num);
-        self.page_lock.unlock();
-        rt
+        let mut page = self.page.lock();
+        (*page).alloc_user_page(num)
     }
 
     pub fn free_page(&mut self, addr : *mut u8) {
-        self.page_lock.lock();
-        self.page.free_page(addr);
-        self.page_lock.unlock();
+        let mut page = self.page.lock();
+        (*page).free_page(addr);
     }
 
     pub fn alloc_memory(&mut self, size : usize, is_kernel : bool)->Option<*mut u8> {
-        self.memory_lock.lock();
-        let rt;
+        let mut memory = self.memory.lock();
         if is_kernel {
-            rt = self.memory.alloc_kernel_memory(size)
+            (*memory).alloc_kernel_memory(size)
         }
         else {
-            rt = self.memory.alloc_user_memory(size)
+            (*memory).alloc_user_memory(size)
         }
-        self.memory_lock.unlock();
-        rt
     }
 
     pub fn free_kernel_memory(&mut self, addr : *mut u8) {
-        self.memory_lock.lock();
-        self.memory.free_kernel_memory(addr);
-        self.memory_lock.unlock();
+        let mut memory = self.memory.lock();
+        (*memory).free_kernel_memory(addr);
     }
 
     pub fn free_user_memory(&mut self, addr : *mut u8) {
-        self.memory_lock.lock();
-        self.memory.free_user_memory(addr);
-        self.memory_lock.unlock();
+        let mut memory = self.memory.lock();
+        (*memory).free_user_memory(addr);
     }
 
     pub fn print(&mut self) {
-        self.page_lock.lock();
-        self.page.print();
-        self.page_lock.unlock();
-        self.memory_lock.lock();
-        self.memory.print();
-        self.memory_lock.unlock();
+        let page = self.page.lock();
+        (*page).print();
+        let memory = self.memory.lock();
+        (*memory).print();
     }
 }
 

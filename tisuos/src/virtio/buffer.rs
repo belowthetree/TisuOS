@@ -4,7 +4,7 @@
 
 use core::cmp::min;
 
-use crate::{memory::{block::Block}, sync::{ReadWriteMutex}};
+use crate::{memory::{block::Block}, sync::mutex::{ReadWriteMutex}};
 
 const BUFFER_SIZE : usize = 1024 * 4096; // 4 MB
 const CACHE_SIZE : usize = 4;
