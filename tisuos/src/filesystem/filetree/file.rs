@@ -8,27 +8,24 @@
 
 /// ## 全局文件信息记录
 /// 所有被打开的文件会被记录在这
-pub static mut OPENED_FILES : Option<Vec<File>> = None;
-pub static mut FILE_LOCK : Mutex = Mutex::new();
+pub static mut OPENED_FILES : Option<ContentMutex<Vec<File>>> = None;
 
 pub fn init() {
     unsafe {
-        OPENED_FILES = Some(Vec::<File>::new());
+        OPENED_FILES = Some(ContentMutex::new(Vec::<File>::new()));
     }
 }
 
 fn get_file_record(start_cluster : usize, block_idx : usize)->Option<File>{
     unsafe {
-        FILE_LOCK.lock();
-        if let Some(files) = &mut OPENED_FILES{
-            for file in files.iter(){
+        if let Some(mutex) = &mut OPENED_FILES{
+            let files = mutex.lock();
+            for file in (*files).iter(){
                 if file.start_cluster == start_cluster && file.block_idx == block_idx{
-                    FILE_LOCK.unlock();
                     return Some(file.clone());
                 }
             }
         }
-        FILE_LOCK.unlock();
         None
     }
 }
@@ -36,55 +33,48 @@ fn get_file_record(start_cluster : usize, block_idx : usize)->Option<File>{
 /// 如果不存在，则加入
 fn update_file_record(file : &File){
     unsafe {
-        FILE_LOCK.lock();
-        if let Some(files) = &mut OPENED_FILES{
-            for (idx, f) in files.iter().enumerate(){
+        if let Some(mutex) = &mut OPENED_FILES{
+            let mut files = mutex.lock();
+            for (idx, f) in (*files).iter_mut().enumerate(){
                 if f.start_cluster == file.start_cluster && f.block_idx == file.block_idx{
                     files[idx] = file.clone();
-                    FILE_LOCK.unlock();
                     return;
                 }
             }
             files.push(file.clone());
         }
-        FILE_LOCK.unlock();
     }
 }
 
 fn open_file(file : &File, flag : u8)->Result<(), ()>{
     unsafe {
-        FILE_LOCK.lock();
-        if let Some(files) = &mut OPENED_FILES{
-            for f in files{
+        if let Some(mutex) = &mut OPENED_FILES{
+            let mut files = mutex.lock();
+            for f in (*files).iter_mut(){
                 if f.start_cluster == file.start_cluster && f.block_idx == file.block_idx{
                     if f.is_write() || f.is_read() && flag & OpenFlag::Write.val() != 0{
-                        FILE_LOCK.unlock();
                         return Err(());
                     }
                     f.open_cnt += 1;
-                    FILE_LOCK.unlock();
                     return Ok(());
                 }
             }
         }
-        FILE_LOCK.unlock();
         Err(())
     }
 }
 
 fn close_file(file : &File){
     unsafe {
-        FILE_LOCK.lock();
-        if let Some(files) = &mut OPENED_FILES{
-            for f in files{
+        if let Some(mutex) = &mut OPENED_FILES{
+            let mut files = mutex.lock();
+            for f in (*files).iter_mut(){
                 if f.start_cluster == file.start_cluster && f.block_idx == file.block_idx{
                     f.open_cnt -= 1;
-                    FILE_LOCK.unlock();
                     return;
                 }
             }
         }
-        FILE_LOCK.unlock();
     }
 }
 
@@ -299,8 +289,7 @@ impl OpenFlag{
 }
 
 
-use crate::{filesystem::interface::{read_content, write_content},
-    libs::str::convert_to_usize, memory::block::{Block}, sync::mutex::Mutex};
+use crate::{filesystem::interface::{read_content, write_content}, libs::str::convert_to_usize, memory::block::{Block}, sync::{content::ContentMutex}};
 use super::{super::{filetree::directory::DirItem}, directory::get_directory};
 use alloc::{prelude::v1::*};
 // use crate::uart;

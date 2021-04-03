@@ -2,7 +2,7 @@
 //! 
 //! 2021年2月6日 zg
 
-use crate::{interrupt::trap::Environment, sync::mutex::Mutex};
+use crate::{interrupt::trap::Environment, sync::content::ContentMutex};
 use alloc::{collections::VecDeque};
 
 
@@ -35,28 +35,25 @@ pub struct ProgramInfo {
 
 pub struct PipeUnit {
     pub tid : usize,
-    pub val : VecDeque<usize>,
-    pub lock : Mutex,
+    pub val : ContentMutex<VecDeque<usize>>,
 }
 
 impl PipeUnit {
     pub fn new(tid : usize)->Self {
         Self {
             tid : tid,
-            val : VecDeque::<usize>::new(),
-            lock : Mutex::new(),
+            val : ContentMutex::new(VecDeque::<usize>::new()),
         }
     }
+
     pub fn push(&mut self, val : usize) {
-        self.lock.lock();
-        self.val.push_back(val);
-        self.lock.unlock();
+        let mut vals = self.val.lock();
+        (*vals).push_back(val);
     }
+
     pub fn pop(&mut self)->Option<usize> {
-        self.lock.lock();
-        let rt = self.val.pop_front();
-        self.lock.unlock();
-        rt
+        let mut val = self.val.lock();
+        (*val).pop_front()
     }
 }
 

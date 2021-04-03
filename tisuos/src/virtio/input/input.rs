@@ -132,12 +132,14 @@ impl InputDevice {
             }
         }
     }
+
     pub fn fill_event(&mut self, buffer_idx : usize) {
         let addr = unsafe {self.buffer.add(buffer_idx % EVENT_BUFFER_SIZE) as u64};
         let size = size_of::<InputEvent>() as u32;
         self.event_queue.add_avail();
         self.event_queue.add_desc(addr, size, DescFlag::Write as u16);
     }
+
     pub fn pending(&mut self){
         unsafe {
             while self.event_queue.is_pending() {
@@ -154,8 +156,6 @@ impl InputDevice {
                         else {add_scroll(2);}
                     }
                     _ => {
-                        use crate::uart;
-                        println!("unknown event")
                     }
                 }
             }

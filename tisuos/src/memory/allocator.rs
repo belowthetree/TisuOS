@@ -42,10 +42,10 @@ impl<T:PageOp> Allocator<T> {
         let struct_size = (total_size / size + 7) / 8 + size_of::<MemoryPool>();
         let phy_addr ;
         if is_kernel {
-            phy_addr = self.page_manager.alloc_kernel_page(num_alloc).unwrap();
+            phy_addr = alloc_kernel_page(num_alloc).unwrap();
         }
         else{
-            phy_addr = self.page_manager.alloc_user_page(num_alloc).unwrap();
+            phy_addr = alloc_user_page(num_alloc).unwrap();
         }
         // 块的粒度较大时另外存放结构体
         if size > struct_size * 2 {
@@ -94,10 +94,10 @@ impl<T:PageOp> Allocator<T> {
 
             // 如果块结构体在自己管理的页表内
             if node.is_inside() {
-                self.page_manager.free_page(head.unwrap() as *mut u8);
+                free_page(head.unwrap() as *mut u8);
             }
             else {
-                self.page_manager.free_page(node.physic_base);
+                free_page(node.physic_base);
                 self.free(head.unwrap() as *mut u8, is_kernel);
             }
             self.remove_pool(head.unwrap(), is_kernel);
@@ -408,6 +408,5 @@ pub fn test(){
 
 use core::{mem::size_of};
 use crate::{uart};
-use super::{bitmap::{Bitmap}, mem_manager::{MemoryOp, PageOp},
-    alloc, free, print};
+use super::{alloc, alloc_kernel_page, alloc_user_page, bitmap::{Bitmap}, free, free_page, mem_manager::{MemoryOp, PageOp}, print};
 use alloc::prelude::v1::*;

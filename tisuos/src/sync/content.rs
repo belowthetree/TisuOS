@@ -8,27 +8,37 @@ use core::ops::{Deref, DerefMut};
 
 use super::mutex::Mutex;
 
-
+/// ```rust
+/// let mut mutex = ContentMutex::new(5);
+/// let ctx = mutex.lock();
+/// *ctx = 2;
+/// ```
+/// ## 内容锁
+/// 借用临时变量进行解锁操作，减少代码量，确保百分百解锁
 pub struct ContentMutex<T> {
-    value : T,
+    pub value : T,
     pub mutex : Mutex,
 }
 
 impl<T> ContentMutex<T> {
-    pub fn new(value : T)->Self {
+    pub const fn new(value : T)->Self {
         Self {
             value : value,
             mutex : Mutex::new(),
         }
     }
 
-    pub fn lock(&mut self)->Content<T> {
+    pub fn raw_lock(&mut self) {
         self.mutex.lock();
-        Content::new(self)
     }
 
     pub fn unlock(&mut self) {
         self.mutex.unlock();
+    }
+
+    pub fn lock(&mut self)->Content<T> {
+        self.mutex.lock();
+        Content::new(self)
     }
 }
 

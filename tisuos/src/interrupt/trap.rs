@@ -38,15 +38,13 @@ impl Environment {
     }
 }
 
-pub static mut ENVS : [Environment;4] = [Environment::new();4];
-static mut LOCKER : Mutex = Mutex::new();
+pub static mut ENVS : ContentMutex<[Environment;4]> = ContentMutex::new([Environment::new();4]);
 
 pub fn init(hartid : usize){
     unsafe {
-        LOCKER.lock();
-        let ad = (&mut ENVS[hartid] as *mut Environment) as usize;
+        let mut envs = ENVS.lock();
+        let ad = (&mut (*envs)[hartid] as *mut Environment) as usize;
         cpu::write_mscratch(ad);
-        LOCKER.unlock();
     }
 }
 
@@ -163,7 +161,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
 }
 
 
-use crate::{memory::config::{KERNEL_STACK_END, KERNEL_STACK_START}, sync::mutex::Mutex, task::{get_task_mgr}};
+use crate::{memory::config::{KERNEL_STACK_END, KERNEL_STACK_START}, sync::{content::ContentMutex}, task::{get_task_mgr}};
 
 use crate::{plic, uart, cpu};
 use super::{syscall, timer};
