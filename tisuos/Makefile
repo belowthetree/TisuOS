@@ -23,15 +23,18 @@ CPU=rv64
 CPUS=4
 MEM=512M
 DISK=hd.dsk
-DRIVE= -device virtio-gpu-device -device virtio-net-device -device virtio-tablet-device -device virtio-keyboard-device -drive if=none,format=raw,file=$(DISK),id=foo -device virtio-blk-device,scsi=off,drive=foo
+DRIVER = -device virtio-gpu-device -device\
+ virtio-net-device -device virtio-tablet-device\
+ -device virtio-keyboard-device -DRIVER if=none,format=raw,file=$(DISK),id=foo\
+ -device virtio-blk-device,scsi=off,DRIVER=foo
 
 
-all:
+build:
 	cargo build
-	$(CC) $(CFLAGS) $(LINKER_SCRIPT) $(INCLUDES) -o $(OUT) $(SOURCES_ASM) $(LIBS) $(LIB)
+# $(CC) $(CFLAGS) $(LINKER_SCRIPT) $(INCLUDES) -o $(OUT) $(SOURCES_ASM) $(LIBS) $(LIB)
 	
-run: all
-	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM) $(DRIVE) -nographic -serial mon:stdio -bios none -kernel $(OUT)
+run: build
+	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM) $(DRIVER) -nographic -serial mon:stdio -bios none -kernel $(RUST_TARGET)
 
 
 .PHONY: clean
