@@ -47,13 +47,11 @@ impl PipeUnit {
     }
 
     pub fn push(&mut self, val : usize) {
-        let mut vals = self.val.lock();
-        (*vals).push_back(val);
+        self.val.lock().push_back(val);
     }
 
     pub fn pop(&mut self)->Option<usize> {
-        let mut val = self.val.lock();
-        (*val).pop_front()
+        self.val.lock().pop_front()
     }
 }
 

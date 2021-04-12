@@ -30,14 +30,8 @@ impl TaskPoolBasicOp for TaskPool {
         let t = Thread::new(func, &p).unwrap();
         let tid = t.tid;
         p.tid.push(t.tid);
-        {
-            let mut process = self.process.lock();
-            (*process).insert(p.info.pid, p);
-        }
-        {
-            let mut thread = self.thread.lock();
-            (*thread).insert(t.tid, t);
-        }
+        self.process.lock().insert(p.info.pid, p);
+        self.thread.lock().insert(t.tid, t);
 
         Some(tid)
     }
@@ -47,11 +41,11 @@ impl TaskPoolBasicOp for TaskPool {
             info.state == TaskState::Running && info.env.hartid == env.hartid
         }).unwrap();
         let mut thread = self.thread.lock();
-        let src_th = (*thread).get_mut(&id).unwrap();
+        let src_th = thread.get_mut(&id).unwrap();
         src_th.save(env);
         let th = Thread::fork(src_th).unwrap();
         let id = th.tid;
-        (*thread).insert(id, th);
+        thread.insert(id, th);
         Some(id)
     }
 
@@ -79,10 +73,8 @@ impl TaskPoolBasicOp for TaskPool {
     }
 
     fn get_task_prog(&mut self, id : usize)->Option<super::task_info::ProgramInfo> {
-        let thread = self.thread.lock();
-        let id = (*thread).get(&id).unwrap().pid;
-        let process = self.process.lock();
-        let rt = (*process).get(&id).unwrap().get_prog_info();
+        let id = self.thread.lock().get(&id).unwrap().pid;
+        let rt = self.process.lock().get(&id).unwrap().get_prog_info();
         Some(rt)
     }
 
@@ -142,9 +134,8 @@ impl TaskPoolBasicOp for TaskPool {
     }
 
     fn remove_task(&mut self, id : usize)->Result<(), ()> {
-        let mut thread = self.thread.lock();
-        (*thread).remove(&id);
-        Err(())
+        self.thread.lock().remove(&id);
+        Ok(())
     }
 
     fn remove_program(&mut self, id : usize)->Result<(), ()> {

@@ -42,8 +42,7 @@ pub static mut ENVS : ContentMutex<[Environment;4]> = ContentMutex::new([Environ
 
 pub fn init(hartid : usize){
     unsafe {
-        let mut envs = ENVS.lock();
-        let ad = (&mut (*envs)[hartid] as *mut Environment) as usize;
+        let ad = (&mut (*ENVS.lock())[hartid] as *mut Environment) as usize;
         cpu::write_mscratch(ad);
     }
 }

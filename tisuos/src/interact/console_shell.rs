@@ -17,7 +17,7 @@ impl ConsoleShell {
             buffer : String::new(),
         }
     }
-    
+
     pub fn make_command(&mut self) {
         let mut c = self.get_input();
         if c.is_none() {
@@ -31,8 +31,13 @@ impl ConsoleShell {
                     self.do_command(&self.buffer.clone());
                     self.buffer.clear();
                 }
-                _ => {
-                    self.buffer.push(c.unwrap());
+                c => {
+                    if c as u8 == 127 {
+                        self.buffer.pop();
+                    }
+                    else {
+                        self.buffer.push(c);
+                    }
                 }
             }
             c = self.get_input();
@@ -88,30 +93,31 @@ impl ConsoleShell {
         else if s.len() == 1 {
             match s[0] {
                 "draw" => {
-                    {
-                        let color = Pixel::black();
-                        let mut color = Grid::solid_color(0, 0, 100, 100, 20, 20, color);
-                        let mut i = 0;
-                        for c in 'a' as u8..='z' as u8 {
-                            color.fill_font(i, c as char, Pixel::white(), Pixel::black());
-                            i += 1;
-                        }
-                        color.scroll(20);
-                        color.draw_override();
-                        let mut file = File::open(&"0/img/mac.bmp".to_string()).unwrap();
-                        println!("get file");
-                        file.open_flag(OpenFlag::Read.val()).unwrap();
-                        let mut img = generate_image(file).unwrap();
-                        println!("get img");
-                        img.resize(500, 300);
-                        img.updown();
-                        println!("resize");
-                        let img = ColorBlock::image(0, 0, &img);
-                        println!("get colorblock");
-                        img.draw_override();
-                        println!("after draw");
-                        invalid();
+                    if !gpu_support() {
+                        return;
                     }
+                    let color = Pixel::black();
+                    let mut color = Grid::solid_color(0, 0, 100, 100, 20, 20, color);
+                    let mut i = 0;
+                    for c in 'a' as u8..='z' as u8 {
+                        color.fill_font(i, c as char, Pixel::white(), Pixel::black());
+                        i += 1;
+                    }
+                    color.scroll(20);
+                    color.draw_override();
+                    let mut file = File::open(&"0/img/mac.bmp".to_string()).unwrap();
+                    println!("get file");
+                    file.open_flag(OpenFlag::Read.val()).unwrap();
+                    let mut img = generate_image(file).unwrap();
+                    println!("get img");
+                    img.resize(500, 300);
+                    img.updown();
+                    println!("resize");
+                    let img = ColorBlock::image(0, 0, &img);
+                    println!("get colorblock");
+                    img.draw_override();
+                    println!("after draw");
+                    invalid();
                 }
                 "ls" => {
                     if let Some(tree) = &self.directory{
@@ -193,5 +199,14 @@ fn output(c : u8){
 
 use super::console_input::pop;
 use alloc::prelude::v1::*;
-use crate::{filesystem::{elf::load_elf, filetree::{directory::{Directory, get_directory}, file::{File, OpenFlag}}, image::bmp::generate_image}, graphic::{canvas::grid::Grid, colorblock::ColorBlock}, libs::{graphic::Pixel,
-        str::convert_to_usize, syscall::{list_thread}}, uart, virtio::device::invalid};
+use crate::{
+    virtio::device::{gpu_support, invalid},
+    filesystem::{
+        elf::load_elf,filetree::{
+            directory::{
+                Directory, get_directory},
+            file::{File, OpenFlag}},
+        image::bmp::generate_image},
+    graphic::{canvas::grid::Grid, colorblock::ColorBlock},
+    libs::{graphic::Pixel,
+    str::convert_to_usize, syscall::{list_thread}}, uart};

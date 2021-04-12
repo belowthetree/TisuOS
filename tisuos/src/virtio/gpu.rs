@@ -221,8 +221,6 @@ impl GPU {
     }
 }
 
-
-
 #[repr(C)]
 struct ResourceFlush {
 	header : ControllHeader,
@@ -421,5 +419,3 @@ impl ResourceFlush {
         rt
     }
 }
-
-

@@ -26,18 +26,15 @@ impl<T1 : PageOp + Clone + Copy, T2 : MemoryOp<T1>> MemoryManager<T1, T2> {
     }
 
     pub fn kernel_page(&mut self, num : usize)->Option<*mut u8> {
-        let mut page = self.page.lock();
-        (*page).alloc_kernel_page(num)
+        self.page.lock().alloc_kernel_page(num)
     }
 
     pub fn user_page(&mut self, num : usize)->Option<*mut u8> {
-        let mut page = self.page.lock();
-        (*page).alloc_user_page(num)
+        self.page.lock().alloc_user_page(num)
     }
 
     pub fn free_page(&mut self, addr : *mut u8) {
-        let mut page = self.page.lock();
-        (*page).free_page(addr);
+        self.page.lock().free_page(addr);
     }
 
     pub fn alloc_memory(&mut self, size : usize, is_kernel : bool)->Option<*mut u8> {
@@ -51,37 +48,34 @@ impl<T1 : PageOp + Clone + Copy, T2 : MemoryOp<T1>> MemoryManager<T1, T2> {
     }
 
     pub fn free_kernel_memory(&mut self, addr : *mut u8) {
-        let mut memory = self.memory.lock();
-        (*memory).free_kernel_memory(addr);
+        self.memory.lock().free_kernel_memory(addr);
     }
 
     pub fn free_user_memory(&mut self, addr : *mut u8) {
-        let mut memory = self.memory.lock();
-        (*memory).free_user_memory(addr);
+        self.memory.lock().free_user_memory(addr);
     }
 
     pub fn print(&mut self) {
-        let page = self.page.lock();
-        (*page).print();
-        let memory = self.memory.lock();
-        (*memory).print();
+        self.page.lock().print();
+        self.memory.lock().print();
     }
 }
 
 
-/// ## 页面管理需要提供的对外接口
+/// ## 页面管理
+/// 页面管理将内存按照 page_size 大小分页，对外提供申请、释放功能
 pub trait PageOp : Clone {
     fn new(kmem_start : usize, umem_start : usize,
         total_mem : usize, page_size : usize)->Self;
-    /// ### 申请内核用页面
     fn alloc_kernel_page(&mut self, num : usize)->Option<*mut u8>;
-    /// ### 申请用户用页面
     fn alloc_user_page(&mut self, num : usize)->Option<*mut u8>;
     fn free_page(&mut self, addr : *mut u8);
     fn page_size(&self)->usize;
     fn print(&self);
 }
 
+/// ## 堆内存管理
+/// 基于页面管理提供任意大小的内存分配功能
 pub trait MemoryOp<T:PageOp> {
     fn new(page : &mut T)->Self;
     fn alloc_kernel_memory(&mut self, size : usize)->Option<*mut u8>;

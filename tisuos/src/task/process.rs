@@ -104,10 +104,10 @@ pub fn init_process(){
     filesystem::init();
     let rt = fork();
     if rt != 0 {
-        println!("fork shell rt {}", rt);
         console_shell::run();
     }
-    if fork() != 0 {
+    if gpu_support() && fork() != 0 {
+        println!("support gpu, start desktop!");
         let mut desk = Plane::new();
         desk.run();
     }
@@ -123,9 +123,8 @@ pub fn init_process(){
 }
 
 extern crate alloc;
-use crate::{desktop::plane::Plane, filesystem, interact::console_shell, interrupt::timer,
-    libs::syscall::{fork}, memory::{page_table::PageTable,
-    user_allocator::MemoryList},virtio::{self}};
+use crate::{desktop::plane::Plane, filesystem, interact::console_shell, interrupt::timer, libs::syscall::{fork}, memory::{page_table::PageTable,
+    user_allocator::MemoryList}, virtio::{self, device::gpu_support}};
 use page_table::{SATP};
 use crate::{memory::page_table, uart};
 use super::{task_info::{ProgramInfo, TaskState}};

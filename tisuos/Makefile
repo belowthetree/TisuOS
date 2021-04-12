@@ -24,19 +24,24 @@ CPU=rv64
 CPUS=4
 MEM=512M
 DISK=hd.dsk
-DRIVER = -device virtio-gpu-device -device\
- virtio-net-device -device virtio-tablet-device\
+DEVICE = -device virtio-tablet-device\
  -device virtio-keyboard-device -drive if=none,format=raw,file=$(DISK),id=foo\
  -device virtio-blk-device,scsi=off,drive=foo
 
+NET_DEVICE = -device virtio-net-device
+GPU_DEVICE = -device virtio-gpu-device
 
 build:
 	cargo build
 # $(CC) $(CFLAGS) $(LINKER_SCRIPT) $(INCLUDES) -o $(OUT) $(SOURCES_ASM) $(LIBS) $(LIB)
 	
 run: build
-	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM) $(DRIVER) -nographic -serial mon:stdio -bios none -kernel $(KERNEL_ELF)
+	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM) $(DEVICE) \
+	-nographic -serial mon:stdio -bios none -kernel $(KERNEL_ELF)
 
+graphic: build
+	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM) $(DEVICE) $(GPU_DEVICE) \
+	-serial mon:stdio -bios none -kernel $(KERNEL_ELF)
 
 .PHONY: clean
 clean:

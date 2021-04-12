@@ -51,12 +51,7 @@ macro_rules! println
 fn panic(_info :& PanicInfo) -> ! {
     println!("Panic! ");
     if let Some(p) = _info.location() {
-		println!(
-				"line {}, file {}: {}",
-				p.line(),
-				p.file(),
-				_info.message().unwrap()
-				);
+		println!("{:?}: {}", p, _info.message().unwrap());
 	}
     else {
         println!("no information");

@@ -237,6 +237,15 @@ pub fn sync_read(block_idx : usize, buffer : *mut u8, size : u32, offset : usize
 	}
 }
 
+pub fn gpu_support()->bool {
+    unsafe {
+        if let Some(dev) = &mut DEVICES {
+            dev.gpu_device.len() > 0
+        }
+        else {false}
+    }
+}
+
 /// ## 覆盖绘制
 pub fn draw_rect_override(device_idx : usize, rect : Rect, color_buffer : *mut Pixel){
     unsafe {
