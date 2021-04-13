@@ -99,7 +99,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
             }
             8 | 9 | 11 => {
                 env.regs[Register::A0.val()] = syscall::handler(env);
-                println!("syscall rt {}", env.regs[Register::A0.val()]);
+                // println!("syscall rt {}", env.regs[Register::A0.val()]);
                 // env.epc = pc + 4;
                 pc += 4;
                 // thread::schedule(env);

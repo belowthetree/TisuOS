@@ -69,6 +69,10 @@ impl Process {
     pub fn get_prog_info(&self)->ProgramInfo {
         self.info
     }
+
+    pub fn set_prog_info(&mut self, info : ProgramInfo) {
+        self.info = info;
+    }
 }
 /// 进程的释放发生在被从调度队列中剔除
 impl Drop for Process{

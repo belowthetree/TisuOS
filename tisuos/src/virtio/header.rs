@@ -52,7 +52,6 @@ impl VirtHeader {
         self.status = 0;
         self.status = StatusField::Acknowledge.val32();
         self.status |= StatusField::DriverOk.val32();
-        println!("host feature {:x}", self.host_features);
         self.guest_features = self.host_features & guest_feat;
         self.status |= StatusField::FeaturesOk.val32();
         let status_ok = self.status;

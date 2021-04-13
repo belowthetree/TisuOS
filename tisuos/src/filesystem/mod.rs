@@ -30,7 +30,7 @@ pub fn init(){
                     FAT32 => {
                         let info = FATInfo::new(&info.head);
                         let mgr = FATManger::new(&*info, idx);
-                        print!("disk {} is fat, total size {}MB\t\t", idx, mgr.get_total_size() / 1024 / 1024);
+                        print!("disk {} is fat32, total size {}MB\t\t", idx, mgr.get_total_size() / 1024 / 1024);
                         println!("used size {}MB\t\t", mgr.get_used_size() / 1024 / 1024);
                         infos.push(Mgr::FAT(mgr));
                     }

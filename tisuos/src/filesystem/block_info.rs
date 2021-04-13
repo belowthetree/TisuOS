@@ -9,20 +9,20 @@ pub struct BlockInfo {
 
 impl BlockInfo {
     pub fn new(block_idx : usize)->Self {
-        let head = Block::new(512);
-        sync_read_buffer(block_idx, &head, 0, 512, 0);
+        let head = Block::new(1024);
+        sync_read_buffer(block_idx, &head, 0, 1024, 0);
         Self {
             head : head,
         }
     }
 
     pub fn get_type(&self)->BlockType {
-        let mut s = String::new();
-        for i in 0..self.head.size {
-            let c = self.head.get(i).unwrap() as char;
-            s.push(c);
+        let fat32 = [0x52, 0x52, 0x61, 0x41];
+        let mut flag = [0;4];
+        for i in 512..516 {
+            flag[i - 512] = self.head.get(i).unwrap();
         }
-        if s.contains("fat") {
+        if fat32 == flag {
             BlockType::FAT32
         }
         else {
@@ -38,4 +38,3 @@ pub enum BlockType {
 
 
 use crate::{memory::block::Block, virtio::buffer::sync_read_buffer};
-use alloc::prelude::v1::*;

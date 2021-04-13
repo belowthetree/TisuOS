@@ -36,9 +36,12 @@ impl<T> ContentMutex<T> {
         self.mutex.unlock();
     }
 
-    pub fn lock(&mut self)->Content<T> {
-        self.mutex.lock();
-        Content::new(self)
+    pub fn lock(&self)->Content<T> {
+        unsafe {
+            let t = self as *const Self as *mut Self;
+            (*t).mutex.lock();
+            Content::new(&mut *t)
+        }
     }
 }
 

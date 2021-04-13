@@ -20,6 +20,7 @@ pub fn handler(env : &Environment) -> usize {
         }
         5 => {
             // 输出任务信息
+            get_task_mgr().unwrap().print();
         }
         6 => {
         }

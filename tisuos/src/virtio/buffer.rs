@@ -57,7 +57,7 @@ impl Buffer {
     /// ### 从磁盘读取更新缓存内容
     pub fn refresh(&mut self, block_idx : usize, idx : usize){
         let idx = idx / BUFFER_SIZE * BUFFER_SIZE;
-        println!("refresh idx {:x}", idx);
+        println!("buffer cache refresh idx {:x}", idx);
         // 暂时没有写入要求，如果需要写入，则取消注释
         // self.write_down();
         self.block_idx = block_idx;

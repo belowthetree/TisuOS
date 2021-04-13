@@ -4,8 +4,7 @@
 //! 2021年3月23日 zg
 
 
-use crate::{interrupt::trap::Environment, libs::help::{switch_kernel, switch_user},
-    memory::page_table::{SATP}, sync::mutex::Mutex};
+use crate::{interrupt::trap::Environment, libs::help::{switch_kernel, switch_user}, memory::{block::Block, page_table::{SATP}}, sync::mutex::Mutex};
 use alloc::prelude::v1::*;
 use super::{task_info::{ExecutionInfo, ProgramInfo, TaskState}};
 
@@ -125,6 +124,15 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
         }).unwrap()
     }
 
+    #[allow(dead_code)]
+    pub fn set_program<F>(&mut self, id : usize, f : F) where F:Fn(&mut ProgramInfo) {
+        self.task_pool.set_task_prog(id, f).unwrap();
+    }
+
+    pub fn print(&self) {
+        self.task_pool.print()
+    }
+
     fn switch_to(&self, info : &ExecutionInfo) {
         let mut env = info.env;
         if info.is_kernel {
@@ -155,8 +163,8 @@ pub trait TaskPoolBasicOp {
     fn fork(&mut self, env : &Environment)->Option<usize>;
     fn branch(&mut self, env : &Environment)->Option<usize>;
 
-    fn get_task_exec(&mut self, id : usize)->Option<ExecutionInfo>;
-    fn get_task_prog(&mut self, id : usize)->Option<ProgramInfo>;
+    fn get_task_exec(&self, id : usize)->Option<ExecutionInfo>;
+    fn get_task_prog(&self, id : usize)->Option<ProgramInfo>;
 
     fn select<F>(&mut self, f : F)->Option<Vec<usize>> where F : Fn(&ExecutionInfo)->bool;
     fn find<F>(&mut self, f : F)->Option<usize> where F : Fn(&ExecutionInfo)->bool;
@@ -167,8 +175,14 @@ pub trait TaskPoolBasicOp {
 
     fn set_task_exec<F>(&mut self, id:usize, f:F)->Result<(), ()>where F:Fn(&mut ExecutionInfo);
 
+    fn send_task_msg(&mut self, id : usize, msg : &Block<u8>);
+
+    fn set_task_prog<F>(&mut self, id : usize, f:F)->Result<(), ()>where F:Fn(&mut ProgramInfo);
+
     fn remove_task(&mut self, id : usize)->Result<(), ()>;
     fn remove_program(&mut self, id : usize)->Result<(), ()>;
+
+    fn print(&self);
 }
 
 /// ## 调度器操作要求

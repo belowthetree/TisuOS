@@ -112,9 +112,9 @@ impl Thread {
         stack_top = stack_bottom as usize + PAGE_SIZE * STACK_PAGE_NUM;
         env.epc = src_th.env.epc + 4;
         env.regs[Register::SP.val()] = stack_top - (src_th.stack_top as usize - src_th.env.regs[Register::SP.val()]);
-        println!("thread fork src tid {} stack {:x} sp {:x}, new stack {:x} sp {:x} tid {}",
-        src_th.tid, src_th.stack_top as usize, src_th.env.regs[Register::SP.val()], stack_top,
-            env.regs[Register::SP.val()], tid);
+        // println!("thread fork src tid {} stack {:x} sp {:x}, new stack {:x} sp {:x} tid {}",
+        // src_th.tid, src_th.stack_top as usize, src_th.env.regs[Register::SP.val()], stack_top,
+        //     env.regs[Register::SP.val()], tid);
         env.regs[Register::A0.val()] = tid;
         unsafe {
             THREAD_CNT = THREAD_CNT + 1;

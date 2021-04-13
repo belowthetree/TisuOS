@@ -45,6 +45,9 @@ impl TaskPoolBasicOp for TaskPool {
         src_th.save(env);
         let th = Thread::fork(src_th).unwrap();
         let id = th.tid;
+        let mut process = self.process.lock();
+        let p = process.get_mut(&th.pid).unwrap();
+        p.tid.push(id);
         thread.insert(id, th);
         Some(id)
     }
@@ -62,7 +65,7 @@ impl TaskPoolBasicOp for TaskPool {
         Some(id)
     }
 
-    fn get_task_exec(&mut self, id : usize)->Option<ExecutionInfo> {
+    fn get_task_exec(&self, id : usize)->Option<ExecutionInfo> {
         let thread = self.thread.lock();
         for (tid, th) in (*thread).iter() {
             if *tid == id {
@@ -72,7 +75,7 @@ impl TaskPoolBasicOp for TaskPool {
         None
     }
 
-    fn get_task_prog(&mut self, id : usize)->Option<super::task_info::ProgramInfo> {
+    fn get_task_prog(&self, id : usize)->Option<super::task_info::ProgramInfo> {
         let id = self.thread.lock().get(&id).unwrap().pid;
         let rt = self.process.lock().get(&id).unwrap().get_prog_info();
         Some(rt)
@@ -133,6 +136,29 @@ impl TaskPoolBasicOp for TaskPool {
         }
     }
 
+    fn send_task_msg(&mut self, id : usize, _msg : &crate::memory::block::Block<u8>) {
+        let process = self.process.lock();
+        let p = process.get(&id);
+        if let Some(_p) = p {
+            // p.heap_list
+        }
+        else {}
+    }
+
+    fn set_task_prog<F>(&mut self, id : usize, f:F)->Result<(), ()>where F:Fn(&mut super::task_info::ProgramInfo) {
+        let mut process = self.process.lock();
+        let p = process.get_mut(&id);
+        if let Some(p) = p {
+            let mut info = p.get_prog_info();
+            f(&mut info);
+            p.set_prog_info(info);
+            Ok(())
+        }
+        else {
+            Err(())
+        }
+    }
+
     fn remove_task(&mut self, id : usize)->Result<(), ()> {
         self.thread.lock().remove(&id);
         Ok(())
@@ -153,6 +179,18 @@ impl TaskPoolBasicOp for TaskPool {
         let mut process = self.process.lock();
         (*process).remove(&id);
         Err(())
+    }
+
+    fn print(&self) {
+        let process = self.process.lock();
+        use crate::uart;
+        for (_, p) in process.iter() {
+            println!("program #{}# {:?}, threads: ", p.info.pid, p.info.state);
+            for tid in p.tid.iter() {
+                let info = self.get_task_exec(*tid).unwrap();
+                println!("#{}# {:?} ", info.tid, info.state);
+            }
+        }
     }
 }
 
