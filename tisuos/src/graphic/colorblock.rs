@@ -32,13 +32,14 @@ impl ColorBlock {
     /// ### 根据图片建立
     pub fn image(x : usize, y : usize, image : &Image)->Self {
         let buffer = Block::<Pixel>::new(image.width * image.height);
-        buffer.copy_from(0, &image.data, 0, image.width * image.height);
+        let data = buffer.array::<Pixel>(0, image.width * image.height);
+        data.copy_from_slice(image.data.as_slice());
         Self {
-            x : x,
-            y : y,
+            x,
+            y,
             width : image.width,
             height : image.height,
-            buffer : buffer,
+            buffer,
         }
     }
     /// ### 全部填充
@@ -148,8 +149,16 @@ impl ColorBlock {
 
 
 use core::cmp::{max, min};
-use crate::{filesystem::image::{image::Image}, libs::{font::{FONT_ASCII, FONT_HEIGHT,
-    FONT_WIDTH}, graphic::Pixel, shape::{Rect, Vector}}, memory::block::Block,
-    virtio::device::{draw_rect_blend, draw_rect_override}};
+use crate::{
+    libs::{
+        font::{
+            FONT_ASCII, FONT_HEIGHT, FONT_WIDTH
+        },
+        graphic::Pixel, shape::Vector
+    },
+    memory::block::Block,
+    virtio::device::{draw_rect_blend, draw_rect_override}
+};
 
-
+use tisu_driver::Rect;
+use fs_format::Image;

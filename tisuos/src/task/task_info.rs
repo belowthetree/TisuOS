@@ -2,9 +2,9 @@
 //! 
 //! 2021年2月6日 zg
 
-use crate::{interrupt::trap::Environment, sync::content::ContentMutex};
+use crate::{interrupt::trap::Environment, memory::map::SATP};
 use alloc::{collections::VecDeque};
-
+use tisu_sync::ContentMutex;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum TaskState {
@@ -24,10 +24,10 @@ pub struct ExecutionInfo {
     pub env : Environment,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ProgramInfo {
     pub pid : usize,
-    pub satp : usize,
+    pub satp : SATP,
     pub state : TaskState,
     pub is_kernel : bool,
 }

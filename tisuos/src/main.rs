@@ -12,22 +12,22 @@
     const_fn,
     global_asm,
     map_first_last,
-    const_in_array_repeat_expressions,
 )]
 
 global_asm!(include_str!("asm/boot.S"));
 global_asm!(include_str!("asm/mem.S"));
-global_asm!(include_str!("asm/func.S"));
 global_asm!(include_str!("asm/trap.S"));
 
 #[macro_use]
 extern crate alloc;
 
+pub static mut M : SpinMutex = SpinMutex::new();
+
 #[macro_export]
 macro_rules! print {
     ($($args:tt)+) => ({
         use core::fmt::Write;
-        let _ = write!(uart::Uart::new(), $($args)+);
+        let _ = write!(crate::uart::Uart::new(), $($args)+);
     });
 }
 
@@ -63,7 +63,7 @@ fn panic(_info :& PanicInfo) -> ! {
 extern "C" fn abort() -> !{
     loop{
         unsafe{
-            asm!("wfi"::::"volatile");
+            asm!("wfi");
         }
     }
 }
@@ -78,6 +78,7 @@ extern "C" fn kernel_init(){
     plic::init();
     task::init();
     input_buffer::init();
+    virtio::init();
 
     process::start_init_process();
 }
@@ -88,7 +89,6 @@ extern "C" fn kernel_start(hartid : usize){
 }
 
 mod uart;
-mod sync;
 mod plic;
 mod cpu;
 mod memory;
@@ -99,11 +99,10 @@ mod interact;
 mod virtio;
 mod filesystem;
 mod graphic;
-mod desktop;
 use interact::console_input;
 use interrupt::trap;
 use task::process;
+use tisu_sync::SpinMutex;
 use uart::Uart;
-use virtio::{input::input_buffer};
-// use alloc::{prelude::v1::*};
-use core::{panic::PanicInfo};
+use virtio::input_buffer;
+use core::panic::PanicInfo;

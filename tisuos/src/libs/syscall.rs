@@ -1,6 +1,8 @@
 //! # 系统调用封装
 //! 2021年1月6日 zg
 
+use alloc::prelude::v1::*;
+
 extern "C" {
     fn make_syscall(num : usize, arg1 : usize, arg2 : usize, arg3 : usize, arg4 : usize) -> usize;
 }
@@ -20,9 +22,15 @@ pub fn fork()->usize{
     }
 }
 
-pub fn exec(func : usize)->usize {
+#[allow(dead_code)]
+pub fn exec(path : String)->usize {
     unsafe {
-        make_syscall(4, func, 0, 0, 0)
+        let mut c = Vec::<char>::new();
+        for ch in path.as_bytes() {
+            c.push(*ch as char);
+        }
+        let addr = c.as_slice() as *const [char] as *const char as usize;
+        make_syscall(4, addr, path.len(), 0, 0)
     }
 }
 
@@ -38,4 +46,3 @@ pub fn branch(func : usize)->usize {
     }
 }
 
-// use crate::{cpu, memory::page::TRAP_STACK_END, uart};

@@ -1,8 +1,10 @@
-//! # user allocator
+//! # 用户堆链（实验性，未验证）
 //! 用于处理用户的堆内存申请
 //! 采用链式的方法将同一个进程的内存连接起来
+//!
 //! 2020年12月13日 zg
 // This is experimental and requires alloc_prelude as a feature
+
 use core::{mem::size_of, ptr::{null_mut}};
 use super::{free, alloc};
 

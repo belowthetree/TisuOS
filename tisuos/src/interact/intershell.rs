@@ -3,6 +3,7 @@
 //! 
 //! 2021年2月7日 zg
 
+#![allow(dead_code)]
 
 pub enum ShellEvent {
     SwitchDirectory(String),
@@ -12,7 +13,7 @@ pub enum ShellEvent {
 }
 
 /// ## 交互 Shell
-/// 专门给图形界面的命令行用，功能类似，不过主要做一个命令处理工具
+/// 专门给图形界面的命令行用，功能类似，不过主要作为一个命令处理工具
 pub struct InterShell{
     input_list : String,
 }
@@ -84,4 +85,4 @@ impl InterShell {
 
 
 use alloc::prelude::v1::*;
-use crate::{libs::{str::convert_to_usize, syscall::list_thread}, uart};
+use crate::{libs::{str::convert_to_usize, syscall::list_thread}};

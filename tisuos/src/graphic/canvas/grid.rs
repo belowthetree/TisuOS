@@ -27,9 +27,9 @@ impl Grid {
             grid_width : w,
             grid_height : h,
             height : height * 2,
-            width : width,
+            width,
             line_num : width / w,
-            buffer : buffer,
+            buffer,
             display_line : 0,
             block_num : width / w * (height * 2 / h),
             colorblock : ColorBlock::solid_color(x, y, width, height, color),
@@ -233,8 +233,13 @@ impl Grid {
 
 use core::cmp::min;
 
-use crate::{filesystem::image::image::Image, graphic::colorblock::ColorBlock, libs::{font::{FONT_ASCII, FONT_HEIGHT, FONT_WIDTH}, graphic::Pixel, shape::{Position, Vector}}, memory::block::Block};
+use fs_format::Image;
+
+use crate::{
+    graphic::colorblock::ColorBlock,
+    libs::{font::{FONT_ASCII, FONT_HEIGHT, FONT_WIDTH},
+    graphic::Pixel, shape::{Position, Vector}}, memory::block::Block
+};
 
 use super::{require::GridBlock};
-// use crate::uart;
 

@@ -3,8 +3,8 @@
 //! 2021年3月23日 zg
 
 
-use crate::{interrupt::trap::Environment, sync::{content::ContentMutex}};
-
+use crate::{interrupt::trap::Environment};
+use tisu_sync::ContentMutex;
 use super::{task_info::{ExecutionInfo, TaskState}, process::Process, task_manager::{TaskPoolBasicOp},
     thread::Thread};
 use alloc::{prelude::v1::*};
@@ -178,12 +178,11 @@ impl TaskPoolBasicOp for TaskPool {
         }
         let mut process = self.process.lock();
         (*process).remove(&id);
-        Err(())
+        Ok(())
     }
 
     fn print(&self) {
         let process = self.process.lock();
-        use crate::uart;
         for (_, p) in process.iter() {
             println!("program #{}# {:?}, threads: ", p.info.pid, p.info.state);
             for tid in p.tid.iter() {

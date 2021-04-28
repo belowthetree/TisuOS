@@ -4,72 +4,68 @@
 //! 
 //! 2021年1月25日 zg
 
-use self::{allocator::Allocator, config::{HEAP_START, KERNEL_PAGE_NUM, MEMORY_END, PAGE_SIZE}, mem_manager::MemoryManager, page::PageManager};
+use self::{
+	config::{HEAP_START, KERNEL_PAGE_NUM, MEMORY_END, PAGE_SIZE},
+};
+use tisu_memory::{MemoryOp, PageManager, Heap};
+use core::alloc::{GlobalAlloc, Layout};
 
-mod allocator;
-mod page;
-mod bitmap;
-mod mem_manager;
 pub mod block;
-pub mod page_table;
 pub mod user_allocator;
 pub mod config;
+pub mod map;
 
-pub static mut MEM_MANAGER : Option<MemoryManager<PageManager, Allocator<PageManager>>> = None;
+type MemoryManager = tisu_memory::MemoryManager<PageManager, Heap<PageManager>>;
+
 static mut USER_HEAP_START : usize = 0;
+static mut MANAGER : Option<MemoryManager> = None;
 
 pub fn init(){
 	unsafe {
+		MANAGER = Some(MemoryManager::new(
+			HEAP_START, KERNEL_PAGE_NUM, PAGE_SIZE, MEMORY_END
+		));
 		USER_HEAP_START = HEAP_START + KERNEL_PAGE_NUM * PAGE_SIZE;
-		MEM_MANAGER = Some(MemoryManager::new());
 	}
 	// test();
 }
 
-#[allow(dead_code)]
-pub fn test(){
-    page::test();
-    allocator::test();
+#[inline]
+pub fn get_manager()->&'static mut MemoryManager {
+	unsafe {
+		let mut rt = None;
+		if let Some(mgr) = &mut MANAGER {
+			rt = Some(mgr);
+		}
+		rt.unwrap()
+	}
 }
 
+#[allow(dead_code)]
+pub fn test(){
+	let mgr = get_manager();
+	for _ in 0..10 {
+		println!("addr {:x}", mgr.user_page(1).unwrap() as usize);
+	}
+	for _ in 0..100 {
+		let addr = mgr.user_page(1).unwrap();
+		println!("addr {:x}", addr as usize);
+		mgr.free_page(addr);
+	}
+}
+
+#[allow(dead_code)]
 pub fn print() {
 	unsafe {
-		if let Some(mgr) = &mut MEM_MANAGER {
+		if let Some(mgr) = &mut MANAGER {
 			mgr.print();
 		}
 	}
 }
 
-pub fn alloc_kernel_page(num : usize)->Option<*mut u8> {
-	unsafe {
-		if let Some(mgr) = &mut MEM_MANAGER {
-			mgr.kernel_page(num)
-		}
-		else{None}
-	}
-}
-
-pub fn alloc_user_page(num : usize)->Option<*mut u8> {
-	unsafe {
-		if let Some(mgr) = &mut MEM_MANAGER {
-			mgr.user_page(num)
-		}
-		else{None}
-	}
-}
-
-pub fn free_page(addr : *mut u8) {
-	unsafe {
-		if let Some(mgr) = &mut MEM_MANAGER {
-			mgr.free_page(addr)
-		}
-		else{panic!("Error {}", 0)}
-	}
-}
-
 pub fn alloc(size : usize, is_kernel : bool)->Option<*mut u8> {
 	unsafe {
-		if let Some(mgr) = &mut MEM_MANAGER {
+		if let Some(mgr) = &mut MANAGER {
 			mgr.alloc_memory(size, is_kernel)
 		}
 		else{None}
@@ -78,17 +74,28 @@ pub fn alloc(size : usize, is_kernel : bool)->Option<*mut u8> {
 
 pub fn free(addr : *mut u8) {
 	unsafe {
-		if let Some(mgr) = &mut MEM_MANAGER {
-			if addr as usize >= HEAP_START && (addr as usize) < USER_HEAP_START {
-				mgr.free_kernel_memory(addr);
-			}
-			else if addr as usize >= USER_HEAP_START && (addr as usize) < MEMORY_END {
-				mgr.free_user_memory(addr);
-			}
-			else {
-				panic!("free memory fail addr: {:x}", addr as usize);
-			}
+		if let Some(mgr) = &mut MANAGER {
+			mgr.free_memory(addr);
 		}
 		else{panic!("Error {}", 0)}
 	}
+}
+
+struct OSGlobalAlloc;
+unsafe impl GlobalAlloc for OSGlobalAlloc {
+    unsafe fn alloc(&self, layout : Layout) -> *mut u8{
+        get_manager().alloc_memory(layout.size(), true).unwrap()
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+        get_manager().free_memory(ptr);
+    }
+}
+
+#[global_allocator]
+static GA: OSGlobalAlloc = OSGlobalAlloc{};
+
+#[alloc_error_handler]
+pub fn alloc_error(layout : Layout) -> !{
+    panic!("Fail to alloc {} bytes with {} bytes alignment", layout.size(), layout.align());
 }

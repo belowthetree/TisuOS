@@ -51,48 +51,39 @@ pub struct Thread{
 /// fork 拷贝原线程栈内容然后创建新的分支
 /// branch 直接根据传入地址（默认是原线程的第二个参数）创建新的线程
 impl Thread {
+    /// ## 为进程新建主线程线程
+    /// 为线程映射栈，同时分别为用户、内核进程映射不同的内存区域
     pub fn new(func : usize, p : &Process)->Option<Self>{
         let mut env = Environment::new();
         let stack_bottom;
-        let tid = unsafe{ THREAD_CNT };
+        let tid = unsafe{ THREAD_CNT.add() };
         let stack_top;
-        if let Some(st) = Thread::stack(p.is_kernel) {
-            stack_bottom = st;
-        }
-        else {
-            return None;
-        }
-        let satp = SATP::from(p.info.satp);
-        let pt = satp.get_page_table().unwrap();
-        page_table::map_kernel_area(pt, p.is_kernel);
-        Thread::map_stack(pt, stack_bottom, p.is_kernel);
+        stack_bottom = Thread::stack(p.is_kernel).expect("thread new alloc stack fail");
+        p.info.satp.map_kernel_area(p.is_kernel);
+        Thread::map_stack(&p.info.satp, stack_bottom, p.is_kernel);
 
         stack_top = stack_bottom as usize + PAGE_SIZE * STACK_PAGE_NUM;
         env.epc = func;
-        env.satp = p.info.satp;
+        env.satp = p.info.satp.val();
         env.regs[Register::A0.val()] = tid;
         env.regs[Register::SP.val()] = stack_top;
         env.regs[Register::RA.val()] = process_exit as usize;
-        unsafe {
-            THREAD_CNT = THREAD_CNT + 1;
-            if THREAD_CNT == 0{
-                THREAD_CNT += 1;
-            }
-        }
         Some(Self{
-            env : env,
-            state : ThreadState::Waiting,
+            env,
+            state : ThreadState::Sleeping,
             stack_top : stack_top as *mut u8,
             pid : p.info.pid,
-            tid : tid,
+            tid,
             is_kernel : p.is_kernel,
         })
     }
-    
+
+    /// ## 原地分支执行
+    /// 将会拷贝原线程栈环境
     pub fn fork(src_th : &Thread)->Option<Self>{
         let mut env = src_th.env;
         let stack_bottom;
-        let tid = unsafe{ THREAD_CNT };
+        let tid = unsafe{ THREAD_CNT.add() };
         let stack_top;
         if let Some(st) = Thread::stack(src_th.is_kernel) {
             stack_bottom = st;
@@ -100,9 +91,7 @@ impl Thread {
         else {
             return None;
         }
-        let satp = SATP::from(src_th.env.satp);
-        let pt = satp.get_page_table().unwrap();
-        Thread::map_stack(pt, stack_bottom, src_th.is_kernel);
+        Thread::map_stack(&SATP::from(src_th.env.satp), stack_bottom, src_th.is_kernel);
         unsafe {
             let stack_size = STACK_PAGE_NUM * PAGE_SIZE;
             let src = (src_th.stack_top as usize - stack_size) as *mut u8;
@@ -116,12 +105,6 @@ impl Thread {
         // src_th.tid, src_th.stack_top as usize, src_th.env.regs[Register::SP.val()], stack_top,
         //     env.regs[Register::SP.val()], tid);
         env.regs[Register::A0.val()] = tid;
-        unsafe {
-            THREAD_CNT = THREAD_CNT + 1;
-            if THREAD_CNT == 0{
-                THREAD_CNT += 1;
-            }
-        }
         Some(Self{
             env : env,
             state : ThreadState::Waiting,
@@ -132,20 +115,15 @@ impl Thread {
         })
     }
 
+    /// ## 函数分支执行
+    /// 区别于 fork，从传入的地址（应该是一个函数地址）开始执行，用全新的栈环境
     pub fn branch(src_th : &Thread)->Option<Self>{
         let mut env = src_th.env;
         let stack_bottom;
-        let tid = unsafe{ THREAD_CNT };
+        let tid = unsafe{ THREAD_CNT.add() };
         let stack_top;
-        if let Some(st) = Thread::stack(src_th.is_kernel) {
-            stack_bottom = st;
-        }
-        else {
-            return None;
-        }
-        let satp = SATP::from(src_th.env.satp);
-        let pt = satp.get_page_table().unwrap();
-        Thread::map_stack(pt, stack_bottom, src_th.is_kernel);
+        stack_bottom = Thread::stack(src_th.is_kernel).expect("branch alloc stack fail");
+        Thread::map_stack(&SATP::from(src_th.env.satp), stack_bottom, src_th.is_kernel);
 
         stack_top = stack_bottom as usize + PAGE_SIZE * STACK_PAGE_NUM;
         env.epc = src_th.env.regs[Register::A1.val()];
@@ -153,43 +131,29 @@ impl Thread {
         src_th.tid, src_th.stack_top as usize, src_th.env.regs[Register::SP.val()], stack_top,
             env.regs[Register::SP.val()], tid);
         env.regs[Register::A0.val()] = tid;
-        unsafe {
-            THREAD_CNT = THREAD_CNT + 1;
-            if THREAD_CNT == 0{
-                THREAD_CNT += 1;
-            }
-        }
         Some(Self{
-            env : env,
+            env,
             state : ThreadState::Waiting,
             stack_top : stack_top as *mut u8,
             pid : src_th.pid,
-            tid : tid,
+            tid,
             is_kernel : src_th.is_kernel,
         })
     }
 
     fn stack(is_kernel : bool)->Option<*mut u8> {
         if is_kernel {
-            alloc_kernel_page(STACK_PAGE_NUM)
+            get_manager().kernel_page(STACK_PAGE_NUM)
         }
         else {
-            alloc_user_page(STACK_PAGE_NUM)
+            get_manager().user_page(STACK_PAGE_NUM)
         }
     }
 
-    fn map_stack(pt : &mut PageTable, stack_bottom : *mut u8, is_kernel : bool) {
-        if is_kernel{
-            for i in 0..STACK_PAGE_NUM{
-                let addr = stack_bottom as usize + i * PAGE_SIZE;
-                pt.map_kernel_data(addr, addr);
-            }
-        }
-        else {
-            for i in 0..STACK_PAGE_NUM{
-                let addr = stack_bottom as usize + i * PAGE_SIZE;
-                pt.map_user_data(addr, addr);
-            }
+    fn map_stack(satp : &SATP, stack_bottom : *mut u8, is_kernel : bool) {
+        for i in 0..STACK_PAGE_NUM{
+            let addr = stack_bottom as usize + i * PAGE_SIZE;
+            satp.map_data(addr, addr, is_kernel);
         }
     }
 }
@@ -223,24 +187,30 @@ impl Thread {
 impl Drop for Thread{
     fn drop(&mut self) {
         let stack_bottom = self.stack_top as usize - PAGE_SIZE * STACK_PAGE_NUM;
-        free_page(stack_bottom as *mut u8);
+        get_manager().free_page(stack_bottom as *mut u8);
         delete_pipe(self.tid);
     }
 }
 
-static mut THREAD_CNT : usize = 1;
+static mut THREAD_CNT : AtomCounter = AtomCounter::new();
 
 /// ## 初始化临时环境内存
 pub fn init(){
 }
 
 
-use crate::{interrupt::trap::{Environment, Register}, memory::{alloc_kernel_page,
-    alloc_user_page, config::PAGE_SIZE, free_page, page_table::{self, PageTable, SATP}},
-    uart};
+use tisu_memory::MemoryOp;
+use tisu_sync::AtomCounter;
 
-use super::{delete_pipe, task_info::{ExecutionInfo}, process::{Process, STACK_PAGE_NUM},
-    task_info::TaskState};
+use crate::{
+    interrupt::trap::{Environment, Register},
+    memory::{config::PAGE_SIZE, get_manager, map::SATP}
+};
+
+use super::{
+    delete_pipe, task_info::ExecutionInfo, process::{Process, STACK_PAGE_NUM},
+    task_info::TaskState
+};
 
 
 

@@ -37,12 +37,13 @@ impl Environment {
         }
     }
 }
+global_asm!(include_str!("../asm/func.S"));
 
-pub static mut ENVS : ContentMutex<[Environment;4]> = ContentMutex::new([Environment::new();4]);
+pub static mut ENVS : [Environment;4] = [Environment::new();4];
 
 pub fn init(hartid : usize){
     unsafe {
-        let ad = (&mut (*ENVS.lock())[hartid] as *mut Environment) as usize;
+        let ad = (&mut ENVS[hartid] as *mut Environment) as usize;
         cpu::write_mscratch(ad);
     }
 }
@@ -72,6 +73,10 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                 cause, hartid, _status, env.epc, env.regs[Register::SP.val()],
                 unsafe {KERNEL_STACK_START}, unsafe {KERNEL_STACK_END}, env.satp,
                 (env as *const Environment) as usize, mtval);
+            if let Some((e, p)) =
+                get_task_mgr().unwrap().get_current_task(hartid) {
+                    println!("{:x?}\n{:x?}", e, p);
+            }
         }
         match num {
             0 => {
@@ -100,10 +105,11 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
             8 | 9 | 11 => {
                 env.regs[Register::A0.val()] = syscall::handler(env);
                 // println!("syscall rt {}", env.regs[Register::A0.val()]);
-                // env.epc = pc + 4;
-                pc += 4;
-                // thread::schedule(env);
-                // pc = waiting as usize;
+                let mgr = get_task_mgr().unwrap();
+                env.epc += 4;
+                mgr.schedule(env);
+                write_satp(0);
+                pc = waiting as usize;
             }
             12 => {
                 panic!("Instruction page fault {}", 0);
@@ -131,7 +137,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                     ptr.add(hartid).write_volatile(0);
                 }
                 get_task_mgr().unwrap().schedule(env);
-                // println!("core {} receive", hartid);
+                write_satp(0);
                 pc = waiting as usize;
             },
             5 => {
@@ -146,6 +152,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                     ptr.add(3).write_volatile(1);
                 }
                 get_task_mgr().unwrap().schedule(env);
+                write_satp(0);
                 pc = waiting as usize;
             },
             11 => {
@@ -160,7 +167,6 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
 }
 
 
-use crate::{memory::config::{KERNEL_STACK_END, KERNEL_STACK_START}, sync::{content::ContentMutex}, task::{get_task_mgr}};
-
-use crate::{plic, uart, cpu};
+use crate::{libs::cpu::write_satp, memory::config::{KERNEL_STACK_END, KERNEL_STACK_START}, task::{get_task_mgr}};
+use crate::{plic, cpu};
 use super::{syscall, timer};

@@ -2,6 +2,13 @@
 //! 系统调用转到这里处理
 //! 2020年12月18日 zg
 
+const PROGRAM_EXIT  : usize = 60;
+const THREAD_EXIT   : usize = 61;
+const FORK          : usize = 57;
+const BRANCH        : usize = 7;
+const PRINT_TASK    : usize = 5;
+const EXEC          : usize = 4;
+
 pub fn handler(env : &Environment) -> usize {
     let mut rt = 0;
     let num = env.regs[Register::A0.val()];
@@ -10,37 +17,37 @@ pub fn handler(env : &Environment) -> usize {
             println!("syscall test");
         }
         2 => {
-            // 设置 timer 触发
+            println!("syscall test2");
         }
         3 => {
             panic!("shei gan diaoyong {}", 0);
         }
-        4 => {
-            rt = exec(env.regs[Register::A1.val()], env.regs[Register::A2.val()] != 0);
+        EXEC => {
+            let ptr = env.regs[Register::A1.val()] as *mut char;
+            let len = env.regs[Register::A2.val()];
+            let path = unsafe {&*(slice_from_raw_parts(ptr, len))};
+            rt = exec(char_to_str(path), env.regs[Register::A2.val()] != 0);
         }
-        5 => {
-            // 输出任务信息
+        PRINT_TASK => {
             get_task_mgr().unwrap().print();
         }
-        6 => {
+        6 => {  
         }
-        7 => {
+        BRANCH => {
             branch(env);
         }
-        57 => {
+        FORK => {
             fork(env);
         }
-        60 => {
+        PROGRAM_EXIT => {
             println!("delete process");
             let mgr = get_task_mgr().unwrap();
             mgr.program_exit(env.hartid);
-            mgr.schedule(&env);
         }
-        61 => {
+        THREAD_EXIT => {
             println!("delete thread");
             let mgr = get_task_mgr().unwrap();
             mgr.task_exit(env.hartid);
-            mgr.schedule(&env);
         }
         _ => {}
     }
@@ -57,13 +64,30 @@ fn branch(env : &Environment){
     mgr.set_task_state(id, TaskState::Sleeping);
 }
 
-fn exec(func : usize, is_kernel : bool)->usize {
-    let mgr = get_task_mgr().unwrap(); 
-    let id = mgr.create_task(func, is_kernel).unwrap();
-    id
+fn exec(path : String, _is_kernel: bool)->usize {
+    let is_kernel = false;
+    let idx = path.find("/").unwrap();
+    let (id, p) = path.split_at(idx);
+    let id = convert_to_usize(&id.to_string());
+    let sys = get_system(id).unwrap();
+    let file = sys.open(p.to_string(), tisu_fs::FileFlag::Read).unwrap().clone();
+    let data = Block::<u8>::new(file.size);
+    sys.read(file.id, data.to_array(0, file.size)).unwrap();
+    let elf = data.type_as::<ELF>();
+    let mut elf = ElfManager::new(elf);
+    let mgr = get_task_mgr().unwrap();
+    let task_id = mgr.create_task(elf.entry(), is_kernel).unwrap(); // 较慢
+    let info = mgr.get_program_info(task_id);
+    info.satp.map_elf(&mut elf, is_kernel);
+    mgr.wake_task(task_id);
+
+    0
 }
 
 
-use crate::{task::task_info::TaskState, uart};
+use core::ptr::slice_from_raw_parts;
+
+use alloc::prelude::v1::*;
+use crate::{filesystem::{elf::{ELF, ElfManager}, get_system}, libs::str::{char_to_str, convert_to_usize}, memory::block::Block, task::task_info::TaskState};
 use crate::task::get_task_mgr;
 use super::trap::{Environment, Register};

@@ -7,6 +7,8 @@
 use core::fmt::{Write, Error};
 use core::convert::TryInto;
 
+use crate::M;
+
 pub const UART_ADDR : usize = 0x1000_0000;
 const LSR_OFFSET : usize = 5;
 
@@ -15,9 +17,11 @@ pub struct Uart;
 /// 字符转换等由 Rust 提供，非常方便
 impl Write for Uart {
 	fn write_str(&mut self, out: &str) -> Result<(), Error> {
+        unsafe {M.lock()}
 		for c in out.bytes() {
 			self.put(c);
 		}
+        unsafe {M.unlock()}
 		Ok(())
 	}
 }

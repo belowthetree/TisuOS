@@ -4,7 +4,12 @@
 //! 2020年12月12日 zg
 
 use alloc::{prelude::v1::*};
-use virtio::device;
+
+
+pub static mut PID_CNT : AtomCounter = AtomCounter::new();
+pub static STACK_PAGE_NUM : usize = 16;
+#[allow(dead_code)]
+pub static HEAP_SIZE : usize = 4096;
 
 /// ## ProcessState
 /// 进程目前分为三种状态：Waiting、Sleeping、Running
@@ -22,48 +27,33 @@ impl PartialEq for ProcessState{
         (*self as usize) == (*other as usize)
     }
 }
+
 /// ## 进程信息结构体
 /// 保存环境、栈堆信息（预计增加唤醒时间、优先级）
 /// pages 属于进程占用的物理页
 pub struct Process{
     pub info : ProgramInfo,
-    pub heap_list : *mut MemoryList,
     pub tid : Vec<usize>,
     pub is_kernel : bool,
 }
 
 impl Process {
     /// ## 新建一个进程
-    /// 内核或用户，传入的是虚拟地址，初始仅映射单页的代码页及全部栈页，堆页暂时不映射
+    /// 进程仅进行基本信息的初始化：堆链表、satp
     pub fn new(is_kernel : bool) -> Option<Self> {
-        let pid = unsafe {PID_CNT};
-        let heap = MemoryList::new(HEAP_SIZE, is_kernel);
-        if heap.is_null(){
-            unsafe {(*heap).free(is_kernel);}
-            None
-        }
-        else {
-            let pt = page_table::PageTable::new();
-            let satp = page_table::make_satp(pt as *mut PageTable as usize, 0);
-
-            unsafe {
-                PID_CNT = PID_CNT % PROCESS_NUM_MAX;
-                PID_CNT += 1;
-            }
-            let info = ProgramInfo{
-                pid: pid,
-                satp: satp,
-                state: TaskState::Running,
-                is_kernel: is_kernel,
-            };
-            let rt = Process{
-                info : info,
-                is_kernel : is_kernel,
-                tid : Vec::<usize>::new(),
-                heap_list: heap,
-            };
-            Some(rt)
-        }
+        let pid = unsafe {PID_CNT.add()};
+        let info = ProgramInfo{
+            pid,
+            satp : SATP::new(),
+            state: TaskState::Running,
+            is_kernel,
+        };
+        let rt = Process{
+            info,
+            is_kernel,
+            tid : Vec::<usize>::new(),
+        };
+        Some(rt)
     }
 
     pub fn get_prog_info(&self)->ProgramInfo {
@@ -77,15 +67,9 @@ impl Process {
 /// 进程的释放发生在被从调度队列中剔除
 impl Drop for Process{
     fn drop(&mut self) {
-        SATP::from(self.info.satp).free_page_table();
-        unsafe {(*self.heap_list).free(self.is_kernel);}
+        self.info.satp.free_page_table();
     }
 }
-
-pub static mut PID_CNT : usize = 1;
-pub static STACK_PAGE_NUM : usize = 16;
-pub static HEAP_SIZE : usize = 4096;
-pub static PROCESS_NUM_MAX : usize = 100000;
 
 pub fn init(){
 }
@@ -100,35 +84,39 @@ pub fn start_init_process(){
 
 /// 初始化进程
 pub fn init_process(){
-    if fork() != 0 {
-        device::run_interrupt();
-    }
+    // if fork() != 0 {
+    //     device::run_interrupt();
+    // }
     timer::set_next_interrupt(0);
-    virtio::init();
     filesystem::init();
     let rt = fork();
     if rt != 0 {
         console_shell::run();
     }
-    if gpu_support() && fork() != 0 {
-        println!("support gpu, start desktop!");
-        let mut desk = Plane::new();
-        desk.run();
-    }
+    // if gpu_support() && fork() != 0 {
+    //     println!("support gpu, start desktop!");
+    //     let mut desk = Plane::new();
+    //     desk.run();
+    // }
     // if fork() != 0{
     //     buffer::write_down_handler();
     // }
 
     unsafe {
         loop {
-            asm!("wfi"::::"volatile");
+            asm!("wfi");
         }
     }
 }
 
 extern crate alloc;
-use crate::{desktop::plane::Plane, filesystem, interact::console_shell, interrupt::timer, libs::syscall::{fork}, memory::{page_table::PageTable,
-    user_allocator::MemoryList}, virtio::{self, device::gpu_support}};
-use page_table::{SATP};
-use crate::{memory::page_table, uart};
-use super::{task_info::{ProgramInfo, TaskState}};
+use crate::{
+    filesystem,
+    interact::console_shell,
+    interrupt::timer,
+    libs::syscall::fork,
+    memory::map::SATP
+};
+
+use super::task_info::{ProgramInfo, TaskState};
+use tisu_sync::AtomCounter;

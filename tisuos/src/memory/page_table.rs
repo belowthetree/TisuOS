@@ -14,25 +14,31 @@ impl SATP {
             flag : ((ppn >> 12) & 0xfff_ffff_ffff) | ((asid & 0xffff) << 44) | ((mode & 0xf) << 60)
         }
     }
+
     pub fn from(satp : usize)->Self{
         SATP{
             flag : satp
         }
     }
+
     pub fn get_ppn_addr(&self)->usize{
         (self.flag & 0xfff_ffff_ffff) << 12
     }
+
     pub fn val(&self) -> usize{
         self.flag as usize
     }
+
     pub fn get_page_table(&self) ->Option<&mut PageTable>{
         unsafe {
             Some(&mut *(self.get_ppn_addr() as *mut PageTable))
         }
     }
+
     pub fn is_map(&self)->bool{
         self.get_ppn_addr() != 0
     }
+
     pub fn free_page_table(&self){
         if self.is_map(){
             let pt = self.get_ppn_addr() as *mut PageTable;
@@ -105,25 +111,31 @@ impl PageTable {
             &mut *(addr as *mut Self)
         }
     }
+
     pub fn map_kernel(&mut self, virtual_addr : usize, physic_addr : usize){
         self.map(virtual_addr, physic_addr, PageBit::Read.val() | PageBit::Write.val()
             | PageBit::Excute.val());
     }
+
     pub fn map_kernel_data(&mut self, virtual_addr : usize, physic_addr : usize){
         self.map(virtual_addr, physic_addr, PageBit::Read.val() | PageBit::Write.val());
     }
+
     pub fn map_kernel_code(&mut self, virtual_addr : usize, physic_addr : usize){
         self.map(virtual_addr, physic_addr, PageBit::Read.val() | PageBit::Excute.val());
     }
+
     pub fn map_user_data(&mut self, virtual_addr : usize, physic_addr : usize){
         self.map(virtual_addr, physic_addr, PageBit::Read.val() | PageBit::Write.val() |
             PageBit::User.val());
     }
+
     pub fn map_user_code(&mut self, virtual_addr : usize, physic_addr : usize){
         self.map(virtual_addr, physic_addr, PageBit::Read.val() | PageBit::User.val()
         | PageBit::Excute.val());
     }
-    pub fn map(&mut self, virtual_addr : usize, physic_addr : usize, flag : u64){
+
+    fn map(&mut self, virtual_addr : usize, physic_addr : usize, flag : u64){
         let vpn = [
             (virtual_addr >> 30) & 0x1ff,
             (virtual_addr >> 21) & 0x1ff,
@@ -154,6 +166,7 @@ impl PageTable {
         pte_final.set_flag(flag);
         pte_final.set_valid();
     }
+
     pub fn free(&mut self){
         for i in 0..512{
             let pte = &self.entry[i];

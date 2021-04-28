@@ -91,6 +91,6 @@ pub fn handler(){
 }
 
 
-use crate::{uart, virtio::device};
+use crate::{virtio::device};
 // use virtio::device;
 use crate::interact::console_input;

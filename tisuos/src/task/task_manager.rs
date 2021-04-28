@@ -4,7 +4,12 @@
 //! 2021年3月23日 zg
 
 
-use crate::{interrupt::trap::Environment, libs::help::{switch_kernel, switch_user}, memory::{block::Block, page_table::{SATP}}, sync::mutex::Mutex};
+use crate::{
+    interrupt::trap::Environment,
+    libs::help::{switch_kernel, switch_user},
+    memory::block::Block,
+};
+use tisu_sync::SpinMutex;
 use alloc::prelude::v1::*;
 use super::{task_info::{ExecutionInfo, ProgramInfo, TaskState}};
 
@@ -19,7 +24,7 @@ pub enum ScheduleMethod{
 pub struct TaskManager<T1, T2> {
     scheduler : T1,
     task_pool : T2,
-    mutex : Mutex,
+    mutex : SpinMutex,
 }
 
 /// ## 任务管理器基本功能实现
@@ -31,16 +36,16 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
         Self {
             scheduler : sche,
             task_pool : pool,
-            mutex : Mutex::new(),
+            mutex : SpinMutex::new(),
         }
     }
 
     pub fn start(&mut self, id : usize, hartid : usize) {
-        let info = self.task_pool.get_task_exec(id).unwrap();
         self.task_pool.set_task_exec(id, |info|{
             info.state = TaskState::Running;
             info.env.hartid = hartid;
         }).unwrap();
+        let info = self.task_pool.get_task_exec(id).unwrap();
         self.switch_to(&info);
     }
 
@@ -50,6 +55,9 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
         });
         if let Some(cur) = cur {
             self.task_pool.set_task_exec(cur, |info|{
+                if info.pid == 1 {
+                    println!("pid 1 save");
+                }
                 info.state = TaskState::Waiting;
                 info.env = env.clone();
             }).unwrap();
@@ -57,11 +65,11 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
         self.mutex.lock();
         let next = self.scheduler.schedule(&mut self.task_pool);
         if let Some(next) = next {
-            let info = self.task_pool.get_task_exec(next).unwrap();
             self.task_pool.set_task_exec(next, |info|{
                 info.state = TaskState::Running;
                 info.env.hartid = env.hartid;
             }).unwrap();
+            let info = self.task_pool.get_task_exec(next).unwrap();
             self.mutex.unlock();
             self.switch_to(&info);
         }
@@ -71,37 +79,49 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
     pub fn create_task(&mut self, func : usize, is_kernel : bool)->Option<usize>{
         self.task_pool.create(func, is_kernel)
     }
+    #[allow(dead_code)]
+    pub fn wake_task(&mut self, id : usize) {
+        self.task_pool.set_task_exec(id, |info| {
+            if info.tid == id {
+                info.state = TaskState::Waiting
+            }
+        }).unwrap();
+    }
 
     pub fn fork_task(&mut self, env : &Environment)->usize {
         self.task_pool.fork(env).unwrap()
     }
-
-    pub fn map_code(&mut self, id : usize, virtual_addr : usize, physic_addr : usize) {
+    #[allow(dead_code)]
+    pub fn map_code(&mut self, id : usize, va : usize, pa : usize) {
         let info = self.task_pool.get_task_prog(id).unwrap();
-        let satp = SATP::from(info.satp);
-        let pt = satp.get_page_table().unwrap();
-        if info.is_kernel {
-            pt.map_kernel_code(virtual_addr, physic_addr);
-        }
-        else {
-            pt.map_user_code(virtual_addr, physic_addr);
-        }
+        info.satp.map_code(va, pa, info.is_kernel)
     }
     #[allow(dead_code)]
-    pub fn map_data(&mut self, id : usize, virtual_addr : usize, physic_addr : usize) {
+    pub fn map_data(&mut self, id : usize, va : usize, pa : usize) {
         let info = self.task_pool.get_task_prog(id).unwrap();
-        let satp = SATP::from(info.satp);
-        let pt = satp.get_page_table().unwrap();
-        if info.is_kernel {
-            pt.map_kernel_data(virtual_addr, physic_addr);
-        }
-        else {
-            pt.map_user_data(virtual_addr, physic_addr);
-        }
+        info.satp.map_data(va, pa, info.is_kernel);
     }
 
     pub fn task_exit(&mut self, hartid : usize) {
         self.task_pool.remove_task(hartid).unwrap();
+    }
+    #[allow(dead_code)]
+    pub fn remove_program(&mut self, id : usize) {
+        let info = self.task_pool.get_task_exec(id).unwrap();
+        self.task_pool.remove_program(info.pid).unwrap();
+    }
+
+    pub fn get_current_task(&mut self, hartid : usize)->Option<(ExecutionInfo, ProgramInfo)> {
+        if let Some(id) = self.task_pool.find(|info| {
+            info.state == TaskState::Running && info.env.hartid == hartid
+        }) {
+            let info1 = self.task_pool.get_task_exec(id).unwrap();
+            let info2 = self.task_pool.get_task_prog(id).unwrap();
+            Some((info1, info2))
+        }
+        else {
+            None
+        }
     }
 
     pub fn program_exit(&mut self, hartid : usize) {
@@ -110,23 +130,15 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
         }).unwrap();
         let info = self.task_pool.get_task_exec(id).unwrap();
         self.task_pool.remove_program(info.pid).unwrap();
-        // let info = self.task_pool.get_task_prog(info.pid).unwrap();
-        // self.task_pool.remove_task(info.pid).ok();
+        println!("after remove pid {}", info.pid);
     }
     #[allow(dead_code)]
-    pub fn get_task_exec_info(&mut self, id : usize)->Option<ExecutionInfo> {
-        self.task_pool.get_task_exec(id)
+    pub fn get_program_info(&self, id : usize)->ProgramInfo {
+        self.task_pool.get_task_prog(id).unwrap()
     }
     #[allow(dead_code)]
-    pub fn get_current_task(&mut self, env : &Environment)->usize {
-        self.task_pool.find(|info|{
-            info.state == TaskState::Running && info.env.hartid == env.hartid
-        }).unwrap()
-    }
-
-    #[allow(dead_code)]
-    pub fn set_program<F>(&mut self, id : usize, f : F) where F:Fn(&mut ProgramInfo) {
-        self.task_pool.set_task_prog(id, f).unwrap();
+    pub fn get_exec_info(&self, id : usize)->ExecutionInfo {
+        self.task_pool.get_task_exec(id).unwrap()
     }
 
     pub fn print(&self) {

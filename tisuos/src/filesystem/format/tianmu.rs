@@ -1,68 +1,85 @@
-//! # 天目文件系统格式
+//! # 天目文件系统格式实现
 //! 
 //! 2021年4月13日 zg
 
-#![allow(dead_code)]
 
-pub const MAGIC : [u8;4] = [2,3,3,3];
+use core::mem::size_of;
 
-#[derive(Clone, Copy)]
-pub struct TianMu {
-    jump1   : u8,
-    jump2   : u8,
-    jump3   : u8,
-    oem     : [u8;8],
-    bpb     : Setting,
+use tianmu_fs::{DirItem, SuperBlock};
+use tisu_fs::{DiskInfo, FileSystem, Format, Leaf, LeafType};
+use alloc::prelude::v1::*;
+use crate::{libs::bytes::{slice_to_string, slice_to_val}, memory::block::Block, virtio::disk_cache::get_cache};
+
+pub struct TianMu(pub fs_format::TianMu);
+
+impl TianMu {
+    pub fn new(device_id:usize)->Self {
+        let cache = get_cache();
+        let sp = Block::<SuperBlock>::new(1);
+        cache.read(device_id, sp.to_array(0, size_of::<SuperBlock>()), 0);
+        Self(fs_format::TianMu::new(device_id, sp.get(0).unwrap()))
+    }
 }
 
+impl Format for TianMu {
+    fn to_system(&self)->FileSystem {
+        unsafe {
+            let t = &mut *(self as *const Self as *mut Self);
+            FileSystem::new(get_cache(), t, self.0.device_id)
+        }
+    }
 
-#[derive(Clone, Copy)]
-pub struct Setting {
-    pub bytes_per_node : u64,
-    pub node_num : u64,
-    pub record_offset : u64,
-    pub root_table_offset : u64,
+    fn parse_node(&self, block_idx : usize)->Result<Vec<tisu_fs::Leaf>, ()> {
+        let mut rt = Vec::new();
+        let data = Block::<DirItem>::new(1);
+        let cache = get_cache();
+        let buf = data.to_array(0, size_of::<DirItem>());
+        for idx in self.get_block_chain(block_idx).unwrap().iter() {
+            let num = self.0.block_size / size_of::<DirItem>();
+            let base = self.0.block_size * idx;
+            let step = size_of::<DirItem>();
+            for i in 0..num {
+                let addr = base + i * step;
+                cache.read(self.0.device_id, buf, addr);
+                let item = data.get(0).unwrap();
+                if item.empty() {
+                    continue;
+                }
+                let ltype = if item.is_dir() {LeafType::Directory} else {LeafType::File};
+                rt.push(Leaf {
+                    name: slice_to_string(&item.name),
+                    ltype,
+                    block_idx: item.start_block as usize,
+                    size: item.length as usize,
+                });
+            }
+        }
+        Ok(rt)
+    }
+
+    fn get_block_chain(&self, start_idx : usize)->Result<Vec<usize>, ()> {
+        let cache = get_cache();
+        let mut rt = Vec::new();
+        let mut flag = start_idx as u64;
+        let data = &mut [0;8];
+        while flag != 0 && flag != tianmu_fs::END {
+            let addr = flag as usize * 8 + self.0.block_map_addr;
+            rt.push(flag as usize);
+            cache.read(self.0.device_id, data, addr);
+            flag = slice_to_val(data);
+        }
+        Ok(rt)
+    }
+
+    fn parse_super_block(&self)->DiskInfo {
+        DiskInfo {
+            stype: tisu_fs::SystemType::Tianmu,
+            total_size: self.0.total_size,
+            block_size: self.0.block_size,
+            root_directory_block_idx: self.0.root_idx,
+            block_start_addr: 0,
+        }
+    }
 }
 
-#[repr(C)]
-pub struct NodeMap {
-    pub flag : u64,
-}
-
-#[repr(u8)]
-pub enum Attribute {
-    Free = 0,
-    File = 1,
-    Directory = 1 << 1,
-    LongNameStart = 1 << 2,
-    LongNameNext = 1 << 3,
-    LongNameEnd = 1 << 4,
-}
-
-#[repr(C)]
-pub enum Item {
-    LongName(LongName),
-    ShortName(ShortName),
-}
-
-#[repr(C)] // 32 字节
-pub struct Table {
-    pub attr : Attribute,
-    pub items : &'static mut [Item],
-}
-
-#[repr(C)] // 31 字节
-pub struct LongName {
-    pub name : [u8;29],
-    pub next : u16,
-}
-
-#[repr(C)] // 31 字节
-pub struct ShortName {
-    pub name : [u8;8],
-    pub create_time : [u8;3], // 时、分、秒
-    pub create_year : u16,    // 最大 65535 年
-    pub create_date : [u8;2], // 月、日
-    pub start_node : u64,
-    pub length : u64,
-}
+// impl 

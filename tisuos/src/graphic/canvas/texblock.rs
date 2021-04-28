@@ -15,25 +15,13 @@ impl TexBlock {
     pub fn new(width : usize, height : usize, padding : usize)->Self {
         assert!(width > 2 * padding);
         Self {
-            width : width,
-            height : height,
-            padding : padding,
+            width,
+            height,
+            padding,
             board : Block::<Pixel>::new(width * height),
         }
     }
-    pub fn fill_image(&self, x : usize, y : usize, image : &Image) {
-        let y = y + self.padding;
-        let height = self.height - self.padding - y;
-        let height = min(height, image.height);
-        let x = x + self.padding;
-        let width = self.width - self.padding - x;
-        let width = min(width, image.width);
-        let mut yy = 0;
-        for y in y..(y + height) {
-            self.board.copy_from(x + y * self.width, &image.data, yy * image.width, width);
-            yy += 1;
-        }
-    }
+
     pub fn fill_font(&self, x : usize, y : usize, c : char, height : usize, width : usize,
             foreground : Pixel, background : Pixel) {
         let c = c as usize;
@@ -81,8 +69,9 @@ impl GridBlock for TexBlock {
 }
 
 use core::cmp::min;
+
 use crate::{libs::font::{FONT_ASCII, FONT_HEIGHT, FONT_WIDTH}};
-use crate::{filesystem::image::{image::Image}, libs::graphic::Pixel, memory::block::Block};
+use crate::{libs::graphic::Pixel, memory::block::Block};
 
 use super::require::GridBlock;
 

@@ -13,13 +13,14 @@ pub struct Block<T>{
 #[allow(dead_code)]
 impl<T1:Copy> Block<T1> {
     pub fn new(size : usize)->Block<T1>{
-        let addr = alloc(
+        let addr = get_manager().alloc_memory(
             size * size_of::<T1>(), true).unwrap() as *mut T1;
         Block {
-            addr : addr,
-            size : size,
+            addr,
+            size,
         }
     }
+
     pub fn get(&self, idx : usize)->Option<T1>{
         if idx >= self.size{
             None
@@ -30,6 +31,7 @@ impl<T1:Copy> Block<T1> {
             }
         }
     }
+
     pub fn set(&self, idx : usize, val : T1, len : usize){
         assert!(idx < self.size);
         unsafe {
@@ -67,7 +69,7 @@ impl<T1:Copy> Block<T1> {
             ptr1.copy_from(ptr2, count);
         }
     }
-    
+
     pub fn get_addr(&self)->usize {
         self.addr as usize
     }
@@ -77,11 +79,26 @@ impl<T1:Copy> Block<T1> {
             &mut *(self.addr as *mut T)
         }
     }
+
     pub fn convert<T2:Copy>(self)->Block<T2> {
         let size = self.size * size_of::<T1>() / size_of::<T2>();
         let rt = Block::<T2>::new(size);
         rt.copy_from(0, &self, 0, self.size);
         rt
+    }
+
+    pub fn to_array(&self, st : usize, len : usize)->&'static mut [u8] {
+        let len = min(self.size, len) * size_of::<T1>();
+        let t = slice_from_raw_parts(
+            unsafe {self.addr.add(st)} as *mut u8, len);
+        unsafe {&mut *(t as *mut [u8])}
+    }
+
+    pub fn array<T>(&self, st : usize, len : usize)->&'static mut [T] {
+        let len = min(self.size, len) * size_of::<T1>();
+        let t = slice_from_raw_parts(
+            unsafe {self.addr.add(st)} as *mut T, len);
+        unsafe {&mut *(t as *mut [T])}
     }
 }
 
@@ -91,7 +108,7 @@ impl<T> Drop for Block<T>{
     }
 }
 
-// use crate::uart;
-use core::{cmp::min, mem::size_of};
+use core::{cmp::min, mem::size_of, ptr::slice_from_raw_parts};
+use tisu_memory::MemoryOp;
 
-use super::{free, alloc};
+use super::{free, get_manager};

@@ -54,7 +54,7 @@ pub struct FATManger{
     total_cluster : usize,
     /// 簇占字节大小
     pub cluster_size : usize,
-    root_dir_cluster_addr : usize,
+    pub root_dir_cluster_addr : usize,
     /// 第一个簇开始的地址
     pub cluster_start_addr : usize,
     pub block_idx : usize,
@@ -83,15 +83,21 @@ impl FATManger {
             buf : Block::<u8>::new(cluster_size),
         }
     }
+
     // 获取 fat 表项
     pub fn get_fat_item(&self, cluster : usize) ->Option<FATItem> {
-        let addr = self.fat_addr as usize + cluster * size_of::<FATItem>();
-        sync_read_buffer(self.block_idx, &self.buf, 0, size_of::<FATItem>() as u32, addr);
+        let st = self.fat_addr as usize + cluster * size_of::<FATItem>();
+        sync_read_buffer(self.block_idx,
+            self.buf.to_array(0, size_of::<FATItem>()), st);
         unsafe{
             Some(
                 (*(self.buf.get_addr() as *mut FATItem)).clone()
             )
         }
+    }
+
+    pub fn get_total_size(&self) ->usize{
+        self.bpb.total_sector2 as usize * self.bpb.bytes_per_sector as usize
     }
     /// 获取目录项
     pub fn get_dir_items(&mut self, sub_dir : usize) -> Option<Vec::<FatDirItem>>{
@@ -148,7 +154,7 @@ impl FATManger {
         let b = Block::<u32>::new(4);
         b.set(0, val, 1);
         let offset = cluster * size_of::<FATItem>() + self.fat_addr;
-        sync_write_buffer(self.block_idx, &b.convert::<u8>(), 0, 4, offset);
+        sync_write_buffer(self.block_idx, b.to_array(0, 4), offset);
     }
     pub fn find_free_fat_item(&mut self, num : usize)->Option<usize>{
         let mut cluster : usize = 2;
@@ -186,8 +192,8 @@ impl FATManger {
         let addr = st + (cluster - 2) * self.cluster_size + idx * size_of::<FATLongDirItem>();
         let buffer = Block::<FATLongDirItem>::new(size_of::<FATLongDirItem>());
         buffer.set(0, item, 1);
-        sync_write_buffer(self.block_idx, &buffer.convert::<u8>(), 0,
-            size_of::<FATShortDirItem>() as u32, addr);
+        sync_write_buffer(self.block_idx,
+            buffer.to_array(0, size_of::<FATShortDirItem>()), addr);
     }
     pub fn set_short_dir_item(&mut self, cluster : usize, idx : usize, item : FATShortDirItem){
         let st = self.root_dir_cluster_addr;
@@ -198,11 +204,12 @@ impl FATManger {
         }
         let cluster = clusters[i];
         let addr = st + (cluster - 2) * self.cluster_size + idx * size_of::<FATShortDirItem>();
-        let buffer = Block::new(size_of::<FATShortDirItem>());
+        let buffer = Block::<u8>::new(size_of::<FATShortDirItem>());
         unsafe {
             (buffer.get_addr() as *mut FATShortDirItem).write_volatile(item);
         }
-        sync_write_buffer(self.block_idx, &buffer, 0, size_of::<FATShortDirItem>() as u32, addr);
+        sync_write_buffer(self.block_idx, 
+            buffer.to_array(0, size_of::<FATShortDirItem>()), addr);
     }
     pub fn get_dir_item_by_index(&mut self, cluster : usize, idx : usize)->Option<FATShortDirItem>{
         let st = self.root_dir_cluster_addr;
@@ -213,7 +220,7 @@ impl FATManger {
         }
         let cluster = clusters[i];
         let addr = st + (cluster - 2) * self.cluster_size;
-        sync_read_buffer(self.block_idx, &self.buf, 0, self.cluster_size as u32, addr);
+        sync_read_buffer(self.block_idx, self.buf.to_array(0, self.cluster_size), addr, );
         unsafe {
             let item = (self.buf.get_addr() as *mut FATShortDirItem).add(idx);
             return Some((*item).clone());
@@ -230,7 +237,7 @@ impl FATManger {
     pub fn delete_sequence_dir_item(&mut self, cluster : usize, idx : usize, len : usize){
         let st = self.cluster_start_addr;
         let clusters = self.get_all_cluster(cluster).unwrap();
-        let buffer = Block::new(size_of::<FATShortDirItem>());
+        let buffer = Block::<u8>::new(size_of::<FATShortDirItem>());
         for i in 0..len{
             let ii = (idx + i) / (self.cluster_size / size_of::<FATShortDirItem>());
             if ii >= clusters.len(){
@@ -238,7 +245,8 @@ impl FATManger {
             }
             let cluster = clusters[ii];
             let addr = st + cluster * self.cluster_size + (idx + i) * size_of::<FATShortDirItem>();
-            sync_write_buffer(self.block_idx, &buffer, 0, size_of::<FATShortDirItem>() as u32, addr);
+            sync_write_buffer(self.block_idx,
+                buffer.to_array(0, size_of::<FATShortDirItem>()), addr);
         }
         
     }
@@ -253,8 +261,9 @@ impl FATManger {
         let mut record = 0;
         for cluster in clusters {
             let addr = st + (cluster - 2) * self.cluster_size;
-            let buffer = Block::new(self.cluster_size);
-            sync_read_buffer(self.block_idx, &buffer, 0, self.cluster_size as u32, addr);
+            let buffer = Block::<u8>::new(self.cluster_size);
+            sync_read_buffer(self.block_idx,
+                buffer.to_array(0, self.cluster_size), addr);
             for idx in (0..self.cluster_size).step_by(step){
                 unsafe {
                     let tad = buffer.get_addr() as *mut u8;
@@ -285,8 +294,9 @@ impl FATManger {
         let cluster_num = self.cluster_size / size_of::<FATShortDirItem>();
         for cluster in clusters {
             let addr = st + (cluster - 2) * self.cluster_size;
-            let buffer = Block::new(self.cluster_size);
-            sync_read_buffer(self.block_idx, &buffer, 0, self.cluster_size as u32, addr);
+            let buffer = Block::<u8>::new(self.cluster_size);
+            sync_read_buffer(self.block_idx, 
+                buffer.to_array(0, self.cluster_size), addr);
             let buffer = buffer.convert::<FATShortDirItem>();
             for idx in 0..cluster_num {
                 let item = buffer.get(idx).unwrap();
@@ -303,7 +313,7 @@ impl FATManger {
         Some(rt)
     }
     /// 根据起始簇号获取整个簇链
-    fn get_all_cluster(&mut self, start_cluster : usize) ->Option<Vec::<usize>> {
+    pub fn get_all_cluster(&mut self, start_cluster : usize) ->Option<Vec::<usize>> {
         let mut rt = Vec::<usize>::new();
         let mut num = start_cluster;
         unsafe {
@@ -350,7 +360,7 @@ impl FATItem {
         self.item
     }
     pub fn has_next(&self)->bool{
-        self.item >= 2 && self.item < 0x0ffffff7
+        self.item >= 2 && self.item < 0x0fff_fff7
     }
     pub fn is_item(&self) ->bool {
         self.item >= 2 && self.item <= 0x0fffffff
@@ -367,12 +377,16 @@ pub struct FatDirItem{
 impl FatDirItem {
     pub fn new(filename : String, attr : u8, start_cluster : usize, size : usize, idx : usize)->Self{
         Self{
-            filename : filename,
-            attr : attr,
-            start_cluster : start_cluster,
-            size : size,
-            idx : idx,
+            filename,
+            attr,
+            start_cluster,
+            size,
+            idx,
         }
+    }
+
+    pub fn is_dir(&self)->bool {
+        self.attr == Attribute::SubDir.val()
     }
 }
 #[repr(packed)]
@@ -551,25 +565,23 @@ impl FATLongDirItem{
     pub fn get_name(&self)->String{
         let mut name = String::new();
         let mut t = Vec::<u16>::new();
-        unsafe {
-            for i in self.name1.iter(){
-                if *i == 0 || *i == 0xffff{
-                    break;
-                }
-                t.push(*i);
+        for i in {self.name1}.iter(){
+            if *i == 0 || *i == 0xffff{
+                break;
             }
-            for i in self.name2.iter(){
-                if *i == 0 || *i == 0xffff{
-                    break;
-                }
-                t.push(*i);
+            t.push(*i);
+        }
+        for i in {self.name2}.iter(){
+            if *i == 0 || *i == 0xffff{
+                break;
             }
-            for i in self.name3.iter(){
-                if *i == 0 || *i == 0xffff{
-                    break;
-                }
-                t.push(*i);
+            t.push(*i);
+        }
+        for i in {self.name3}.iter(){
+            if *i == 0 || *i == 0xffff{
+                break;
             }
+            t.push(*i);
         }
         let res = String::from_utf16(&t[..]).unwrap();
         name.push_str(&res[..]);
@@ -623,7 +635,10 @@ pub struct Extend{
 }
 
 use core::{mem::size_of};
-use crate::{libs::str::{from_u64, split_back, as_u64}, memory, virtio::buffer::{sync_read_buffer, sync_write_buffer}};
+use crate::{
+    libs::str::{from_u64, split_back, as_u64},
+    memory,
+    virtio::disk_cache::{sync_read_buffer, sync_write_buffer}
+};
 use memory::block::Block;
 use alloc::{prelude::v1::*};
-// use crate::uart;

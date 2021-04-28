@@ -4,6 +4,17 @@
 
 #![allow(dead_code)]
 
+pub fn usize_to_str(num : usize)->String {
+    let mut rt = String::new();
+    let mut num = num;
+    while num != 0 {
+        let t = num % 10;
+        rt.push(t as u8 as char);
+        num = num / 10;
+    }
+    rt
+}
+
 pub fn from_u64(num : u64) ->String {
     let mut n = num;
     let mut rt = String::new();
@@ -107,5 +118,12 @@ pub fn make_shortname(name : &String)->String{
     _s
 }
 
+pub fn char_to_str(cs : &[char])->String {
+    let mut rt = String::new();
+    for c in cs {
+        rt.push(*c);
+    }
+    rt
+}
 
 use alloc::{prelude::v1::*};

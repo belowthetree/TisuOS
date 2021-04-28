@@ -48,89 +48,105 @@ impl ConsoleShell {
         let s : Vec<&str> = cmd.split(' ').collect();
         if s.len() == 2{
             match s[0] {
+                "draw" => {
+                    if gpu_support() {
+                        if let Some(dir) = &self.directory {
+                            let sys = get_system(dir.device_id).unwrap();
+                            let path = dir.path.clone() + "/" + s[1];
+                            let file = sys.open(path.clone(), FileFlag::Read).unwrap().clone();
+                            let data = Block::<u8>::new(file.size);
+                            sys.read(file.id, data.to_array(0, file.size)).unwrap();
+                            let mut img = BMP::decode(
+                                data.to_array(0, file.size)).unwrap();
+                            img.resize(100, 100);
+                            let ptr = img.data.as_mut_slice();
+                            let ptr = ptr as *mut [Pixel] as *mut Pixel;
+                            println!("draw {}, w {} h {}", path, img.width, img.height);
+                            draw_rect_override(0, Rect {
+                                x1: 0,
+                                y1: 0,
+                                x2: img.width as u32,
+                                y2: img.height as u32,
+                            }, ptr);
+                            invalid();
+                        }
+                    }
+                    else {
+                        println!("no graphic");
+                    }
+                }
                 "cd" => {
-                    self.enter_directory(s[1].to_string());
+                    if let Some(dir) = &self.directory {
+                        let sys = get_system(dir.device_id).unwrap();
+                        // if s[1] == ".." && s[1].contains("/") {
+                        //     let path : Vec<&str> = dir.path.split("/").collect();
+                        // }
+                        println!("before enter {}", s[1]);
+                        self.directory = Some(sys.enter(s[1].to_string()).unwrap());
+                    }
                 }
                 "cddisk" => {
-                    self.directory = get_directory(convert_to_usize(&s[1].to_string()), 2);
+                    let sys = 
+                        get_system(convert_to_usize(&s[1].to_string())).unwrap();
+                    self.directory = Some(sys.enter(String::from("")).unwrap());
                 }
                 "readelf" =>{
-                    // if let Some(tree) = &mut self.filetree{
-                    //     if let Some(mut file) = tree.get_file(s[1].to_string()){
-                    //         if file.open(OpenFlag::Read.val()).is_ok(){
-                    //             if let Some(buffer) = file.read(0, 512){
-                    //                 let phr = unsafe {
-                    //                     &*(buffer.addr as *const ProgramHeader)
-                    //                 };
-                    //                 phr.list();
-                    //             }
-                    //         }
-                    //     } else {
-                    //         println!("no file chain");
-                    //     }
-                    // }
+                    if let Some(dir) = &self.directory {
+                        let sys = get_system(dir.device_id).unwrap();
+                        let file = 
+                            sys.open(s[1].to_string(), FileFlag::Read).unwrap().clone();
+                        let data = Block::<u8>::new(file.size);
+                        sys.read(file.id, data.to_array(0, file.size)).unwrap();
+                        let elf = data.type_as::<ELF>();
+                        println!("{:x?}", elf);
+                    }
                 }
                 "exec" => {
-                    if let Some(dir) = &mut self.directory{
-                        if let Some(file) = dir.get_file(s[1].to_string()){
-                            load_elf(file)
+                    if let Some(dir) = &self.directory {
+                        println!("exec {}", dir.path.clone() + s[1]);
+                        exec("0".to_string() + &dir.path[..] + s[1]);
+                    }
+                }
+                "cat" => {
+                    if let Some(dir) = &self.directory {
+                        let sys = get_system(dir.device_id).unwrap();
+                        let path = dir.path.clone() + "/" + s[1];
+                        let file = sys.open(path.clone(), FileFlag::Read).unwrap().clone();
+                        println!("path {} size {} {:x}", path, file.size, file.start_idx);
+                        let data = Block::<char>::new(file.size);
+                        sys.read(file.id, data.to_array(0, file.size)).unwrap();
+                        for c in data.array::<u8>(0, file.size) {
+                            print!("{}", *c as char);
                         }
                     }
                 }
-                "del" => {
-                    // if let Some(tree) = &self.filetree{
-                    //     delete_file(tree, &s[1].to_string());
-                    // }
-                }
                 "mkdir" => {
-                    // if let Some(tree) = &self.filetree{
-                    //     create_directory(tree, &s[1].to_string());
-                    // }
                 }
                 _ =>{}
             }
         }
         else if s.len() == 1 {
             match s[0] {
-                "draw" => {
-                    if !gpu_support() {
-                        return;
+                "curdir" => {
+                    if let Some(dir) = &self.directory {
+                        println!("{}", dir.path);
                     }
-                    let color = Pixel::black();
-                    let mut color = Grid::solid_color(0, 0, 100, 100, 20, 20, color);
-                    let mut i = 0;
-                    for c in 'a' as u8..='z' as u8 {
-                        color.fill_font(i, c as char, Pixel::white(), Pixel::black());
-                        i += 1;
+                    else {
+                        println!("not in any filesystem, use cddisk to enter fs");
                     }
-                    color.scroll(20);
-                    color.draw_override();
-                    let mut file = File::open(&"0/img/mac.bmp".to_string()).unwrap();
-                    println!("get file");
-                    file.open_flag(OpenFlag::Read.val()).unwrap();
-                    let mut img = generate_image(file).unwrap();
-                    println!("get img");
-                    img.resize(500, 300);
-                    img.updown();
-                    println!("resize");
-                    let img = ColorBlock::image(0, 0, &img);
-                    println!("get colorblock");
-                    img.draw_override();
-                    println!("after draw");
-                    invalid();
                 }
                 "ls" => {
                     if let Some(tree) = &self.directory{
                         print!("directory: ");
-                        for item in tree.items.iter() {
-                            if item.is_dir() {
+                        for item in tree.item.iter() {
+                            if item.itype == DirItemType::Directory {
                                 print!("{} ", item.name);
                             }
                         }
                         println!();
                         print!("file: ");
-                        for item in tree.items.iter() {
-                            if item.is_file() {
+                        for item in tree.item.iter() {
+                            if item.itype == DirItemType::File {
                                 print!("{} ", item.name);
                             }
                         }
@@ -138,10 +154,6 @@ impl ConsoleShell {
                     }
                 }
                 "lsdisk" => {
-                    // if let Some(tree) = &self.filetree{
-                    //     print!("total size {}MB\t\t", tree.get_total_size() / 1024 / 1024);
-                    //     println!("used size {}KB\t\t", tree.get_used_size() / 1024);
-                    // }
                 }
                 "lsp" => {
                     list_thread();
@@ -149,27 +161,12 @@ impl ConsoleShell {
                 "lsm" => {
                 }
                 "testfat" => {
-                    // test();
                 }
                 _ =>{}
             }
         }
     }
-    
-    fn enter_directory(&mut self, name : String){
-        if let Some(tree) = &self.directory{
-            if &name[..] == ".."{
-                if let Some(dir) = tree.get_parent_directory() {
-                    self.directory = Some(dir);
-                }
-            }
-            else{
-                if let Some(dir) = tree.get_sub_directory(&name) {
-                    self.directory = Some(dir);
-                }
-            }
-        }
-    }
+
     /// ### 获取命令行输入
     fn get_input(&mut self)->Option<char> {
         pop()
@@ -181,7 +178,7 @@ pub fn run() {
     let mut console = ConsoleShell::new();
     loop {
         unsafe {
-            asm!("wfi"::::"volatile");
+            asm!("wfi");
         }
         console.make_command();
     }
@@ -199,14 +196,7 @@ fn output(c : u8){
 
 use super::console_input::pop;
 use alloc::prelude::v1::*;
-use crate::{
-    virtio::device::{gpu_support, invalid},
-    filesystem::{
-        elf::load_elf,filetree::{
-            directory::{
-                Directory, get_directory},
-            file::{File, OpenFlag}},
-        image::bmp::generate_image},
-    graphic::{canvas::grid::Grid, colorblock::ColorBlock},
-    libs::{graphic::Pixel,
-    str::convert_to_usize, syscall::{list_thread}}, uart};
+use fs_format::BMP;
+use tisu_driver::{Pixel, Rect};
+use tisu_fs::{DirItemType, Directory, FileFlag};
+use crate::{filesystem::{elf::ELF, get_system}, libs::{str::convert_to_usize, syscall::{exec, list_thread}}, memory::block::Block, virtio::device::{draw_rect_override, gpu_support, invalid}};
