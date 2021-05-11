@@ -1,17 +1,13 @@
 //! # 任务管理
 //! 管理任务系统调度，包含调度算法
+//! 严禁在中断期间使用任何内存管理功能以避免死锁！！！！
 //! 
 //! 2021年3月23日 zg
 
 
-use crate::{
-    interrupt::trap::Environment,
-    libs::help::{switch_kernel, switch_user},
-    memory::block::Block,
-};
+use crate::{filesystem::{pop_task_out, push_task_in, push_task_out}, interrupt::{timer, environment::Environment}, libs::help::{switch_kernel, switch_user}, memory::ProgramArea};
 use tisu_sync::SpinMutex;
-use alloc::prelude::v1::*;
-use super::{task_info::{ExecutionInfo, ProgramInfo, TaskState}};
+use super::{require::{TaskPoolBasicOp, TaskPoolOp}, task_info::{ExecutionInfo, ProgramInfo, TaskState}};
 
 pub enum ScheduleMethod{
     Rotation,
@@ -21,6 +17,7 @@ pub enum ScheduleMethod{
 /// 任务管理器假设任务存在两种状态：程序、执行。
 /// 程序代表任务的整体，执行则是具体的执行、调度单位
 /// 所以任务管理器应当支持针对程序及执行单位的对话操作
+/// 同时任务管理器负责调用调度器及选择调度算法
 pub struct TaskManager<T1, T2> {
     scheduler : T1,
     task_pool : T2,
@@ -31,7 +28,7 @@ pub struct TaskManager<T1, T2> {
 /// ID 分为任务 ID、程序 ID
 /// 原则上只允许通过任务 ID 进行交互。而管理器对外则通过 Environment 或 hartid 交互
 /// 基本的信息交流仅限于程序信息（ProgramInfo）、执行信息（ExecutionInfo）
-impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
+impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
     pub const fn new(sche : T1, pool : T2)->Self {
         Self {
             scheduler : sche,
@@ -40,6 +37,7 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
         }
     }
 
+    /// 用于启动初始进程
     pub fn start(&mut self, id : usize, hartid : usize) {
         self.task_pool.set_task_exec(id, |info|{
             info.state = TaskState::Running;
@@ -49,18 +47,19 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
         self.switch_to(&info);
     }
 
+    /// 调度器的调用及进程切换属于临界区，防止多核竞争错误
     pub fn schedule(&mut self, env : &Environment) {
         let cur = self.task_pool.find(|info|{
             info.state == TaskState::Running && info.env.hartid == env.hartid
         });
         if let Some(cur) = cur {
             self.task_pool.set_task_exec(cur, |info|{
-                if info.pid == 1 {
-                    println!("pid 1 save");
-                }
                 info.state = TaskState::Waiting;
                 info.env = env.clone();
             }).unwrap();
+        }
+        if env.hartid == 0 {
+            self.check_timer();
         }
         self.mutex.lock();
         let next = self.scheduler.schedule(&mut self.task_pool);
@@ -75,11 +74,12 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
         }
         self.mutex.unlock();
     }
-    /// ### 创建任务并返还任务 ID
-    pub fn create_task(&mut self, func : usize, is_kernel : bool)->Option<usize>{
-        self.task_pool.create(func, is_kernel)
+
+    /// 本质是创建进程，返还主线程 ID
+    pub fn create_task(&mut self, program : ProgramArea)->Option<usize>{
+        self.task_pool.create(program)
     }
-    #[allow(dead_code)]
+
     pub fn wake_task(&mut self, id : usize) {
         self.task_pool.set_task_exec(id, |info| {
             if info.tid == id {
@@ -91,24 +91,23 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
     pub fn fork_task(&mut self, env : &Environment)->usize {
         self.task_pool.fork(env).unwrap()
     }
-    #[allow(dead_code)]
-    pub fn map_code(&mut self, id : usize, va : usize, pa : usize) {
-        let info = self.task_pool.get_task_prog(id).unwrap();
-        info.satp.map_code(va, pa, info.is_kernel)
-    }
-    #[allow(dead_code)]
-    pub fn map_data(&mut self, id : usize, va : usize, pa : usize) {
-        let info = self.task_pool.get_task_prog(id).unwrap();
-        info.satp.map_data(va, pa, info.is_kernel);
-    }
 
     pub fn task_exit(&mut self, hartid : usize) {
-        self.task_pool.remove_task(hartid).unwrap();
+        let id = self.task_pool.find(|info|{
+            info.state == TaskState::Running && info.env.hartid == hartid
+        }).unwrap();
+        self.task_pool.remove_task(id).unwrap();
     }
-    #[allow(dead_code)]
-    pub fn remove_program(&mut self, id : usize) {
+
+    pub fn kill_task(&mut self, id : usize) {
+        println!("remove task {}", id);
         let info = self.task_pool.get_task_exec(id).unwrap();
-        self.task_pool.remove_program(info.pid).unwrap();
+        if info.is_main {
+            self.task_pool.remove_program(id).unwrap();
+        }
+        else {
+            self.task_pool.remove_task(id).unwrap();
+        }
     }
 
     pub fn get_current_task(&mut self, hartid : usize)->Option<(ExecutionInfo, ProgramInfo)> {
@@ -129,18 +128,20 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
             info.state == TaskState::Running && info.env.hartid == hartid
         }).unwrap();
         let info = self.task_pool.get_task_exec(id).unwrap();
-        self.task_pool.remove_program(info.pid).unwrap();
-        println!("after remove pid {}", info.pid);
-    }
-    #[allow(dead_code)]
-    pub fn get_program_info(&self, id : usize)->ProgramInfo {
-        self.task_pool.get_task_prog(id).unwrap()
-    }
-    #[allow(dead_code)]
-    pub fn get_exec_info(&self, id : usize)->ExecutionInfo {
-        self.task_pool.get_task_exec(id).unwrap()
+        if info.is_main {
+            self.task_pool.remove_program(id).unwrap();
+            // println!("remove pid {}", info.pid);
+        }
+        else {
+            self.task_pool.remove_task(id).unwrap();
+        }
     }
 
+    pub fn get_task_exec(&self, id : usize)->Option<ExecutionInfo> {
+        self.task_pool.get_task_exec(id)
+    }
+
+    /// 调试用函数，待删除
     pub fn print(&self) {
         self.task_pool.print()
     }
@@ -156,45 +157,91 @@ impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
     }
 }
 
-impl<T1 : SchedulerOp, T2 : TaskPoolBasicOp> TaskManager<T1, T2> {
+/// 系统调用部分
+impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
     pub fn branch(&mut self, env:&Environment)->Option<usize> {
         self.task_pool.branch(env)
     }
 
-    pub fn set_task_state(&mut self, id : usize, state : TaskState) {
-        self.task_pool.set_task_exec(id, |info| {
-            info.state = state;
+    pub fn alloc_heap(&mut self, size: usize, id : usize)->(usize, usize) {
+        self.task_pool.alloc_heap(size, id)
+    }
+
+    pub fn free_heap(&mut self, addr : usize, id : usize) {
+        self.task_pool.free_heap(addr, id);
+    }
+
+    pub fn wait_task(&mut self, env: &Environment, target: usize) {
+        let hartid = env.hartid;
+        let id = self.task_pool.find(|info| {
+            info.state == TaskState::Running && info.env.hartid == hartid
         }).unwrap();
+        self.task_pool.wait_task(id, target);
+        self.task_pool.set_task_exec(id, |info|{
+            info.env = env.clone();
+            info.env.epc += 4;
+        }).unwrap();
+    }
+
+    pub fn sleep_timer(&mut self, env: &Environment, time : usize) {
+        let hartid = env.hartid;
+        let time = timer::get_micro_time() + time;
+        let id = self.task_pool.find(|info|{
+            info.state == TaskState::Running && info.env.hartid == hartid
+        }).unwrap();
+        self.task_pool.set_timer(id, time);
+        self.task_pool.set_task_exec(id, |info| {
+            info.env = env.clone();
+            info.env.epc += 4;
+        }).unwrap();
+    }
+
+    pub fn virt_to_phy(&self, id:usize, va:usize)->usize {
+        self.task_pool.virt_to_phy(id, va)
+    }
+
+    fn check_timer(&mut self) {
+        let time = timer::get_micro_time();
+        self.task_pool.check_timer(time);
     }
 }
 
-/// ## 任务池操作要求
-/// 与任务池的操作根据任务号进行，不获取引用，以便模块化
-pub trait TaskPoolBasicOp {
-    fn create(&mut self, func : usize, is_kernel : bool)->Option<usize>;
-    fn fork(&mut self, env : &Environment)->Option<usize>;
-    fn branch(&mut self, env : &Environment)->Option<usize>;
+/// 资源部分
+impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
+    pub fn push_file(&mut self, task_id : usize, file_id:usize) {
+        self.task_pool.push_file(task_id, file_id);
+    }
 
-    fn get_task_exec(&self, id : usize)->Option<ExecutionInfo>;
-    fn get_task_prog(&self, id : usize)->Option<ProgramInfo>;
+    pub fn release_file(&mut self, task_id : usize, file_id:usize) {
+        self.task_pool.release_file(task_id, file_id);
+    }
 
-    fn select<F>(&mut self, f : F)->Option<Vec<usize>> where F : Fn(&ExecutionInfo)->bool;
-    fn find<F>(&mut self, f : F)->Option<usize> where F : Fn(&ExecutionInfo)->bool;
+    pub fn stdout(&mut self, id:usize, data:&[u8]) {
+        // println!("mgr stdout");
+        for c in data {
+            push_task_out(id, *c as char);
+        }
+        // println!("after mgr stdout");
+    }
 
-    fn operation_all<F>(&mut self,f:F) where F:FnMut(&ExecutionInfo);
+    #[allow(dead_code)]
+    pub fn stdin(&mut self, id:usize, data:&[u8]) {
+        for c in data {
+            push_task_in(id, *c as char);
+        }
+    }
 
-    fn operation_once<F>(&mut self, f:F) where F:FnMut(&ExecutionInfo)->bool;
-
-    fn set_task_exec<F>(&mut self, id:usize, f:F)->Result<(), ()>where F:Fn(&mut ExecutionInfo);
-
-    fn send_task_msg(&mut self, id : usize, msg : &Block<u8>);
-
-    fn set_task_prog<F>(&mut self, id : usize, f:F)->Result<(), ()>where F:Fn(&mut ProgramInfo);
-
-    fn remove_task(&mut self, id : usize)->Result<(), ()>;
-    fn remove_program(&mut self, id : usize)->Result<(), ()>;
-
-    fn print(&self);
+    pub fn get_stdout(&mut self, id:usize, data:&mut [u8])->usize {
+        let mut idx = 0;
+        while let Some(c) = pop_task_out(id) {
+            if idx >= data.len() {
+                break;
+            }
+            data[idx] = c as u8;
+            idx += 1;
+        }
+        idx
+    }
 }
 
 /// ## 调度器操作要求

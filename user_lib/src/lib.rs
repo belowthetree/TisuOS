@@ -5,21 +5,46 @@
     panic_info_message,
     lang_items,
     linkage,
+    alloc_error_handler,
+    alloc_prelude,
 )]
+#![allow(dead_code)]
+
+extern crate alloc;
 
 mod lang_items;
-mod libs;
+pub mod libs;
+mod memory;
+#[macro_use]
+pub mod stdio;
 
-pub use libs::syscall::*;
-
-#[no_mangle]
-extern "C" fn start(){
-    main(0);
-}
+pub use stdio::Stdio;
 
 #[linkage = "weak"]
 #[no_mangle]
 fn main(_argc: usize) -> i32 {
-    syscall_test();
     panic!("Cannot find main!");
+}
+
+
+#[macro_export]
+macro_rules! print {
+    ($($args:tt)+) => ({
+        use core::fmt::Write;
+        let _ = write!($crate::Stdio::new(), $($args)+);
+    });
+}
+
+#[macro_export]
+macro_rules! println
+{
+	() => ({
+		   print!("\r\n")
+		   });
+	($fmt:expr) => ({
+			$crate::print!(concat!($fmt, "\r\n"))
+			});
+	($fmt:expr, $($args:tt)+) => ({
+			$crate::print!(concat!($fmt, "\r\n"), $($args)+)
+			});
 }

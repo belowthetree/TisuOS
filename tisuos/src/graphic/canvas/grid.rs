@@ -73,7 +73,7 @@ impl Grid {
         }
 
         let x = point.x - x1;
-        let y = point.y - y1;
+        let y = point.y - y1 + self.display_line;
         let idx = y / self.grid_height * self.line_num + x / self.grid_width;
 
         if idx < self.block_num {

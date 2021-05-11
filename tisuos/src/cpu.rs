@@ -1,3 +1,6 @@
+//! # 硬件相关指令
+//!
+//!
 #![allow(dead_code)]
 
 extern "C" {

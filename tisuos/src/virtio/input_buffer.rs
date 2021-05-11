@@ -6,21 +6,14 @@
 
 #![allow(dead_code)]
 
-use core::borrow::BorrowMut;
+use alloc::prelude::v1::*;
 
-use alloc::{prelude::v1::*};
 use crate::libs::shape::ScalePoint;
 
 const QUEUE_SIZE : usize = 128;
-static mut MOUSE_CUR_IDX : usize = 0;
-// static mut MOUSE_GET_IDX : usize = 0;
-static mut KEY_PRESS_CUR_IDX : usize = 0;
-static mut KEY_PRESS_GET_IDX : usize = 0;
-pub static mut KEY_RELEASE_CUR_IDX : usize = 0;
-pub static mut KEY_RELEASE_GET_IDX : usize = 0;
 static mut SCROLL_CUR_IDX : usize = 0;
 static mut SCROLL_GET_IDX : usize = 0;
-static mut SCROLL : [u16;QUEUE_SIZE] = [0;QUEUE_SIZE]; // 1 是上滑，2 是下滑
+static mut SCROLL : [usize;QUEUE_SIZE] = [0;QUEUE_SIZE]; // 1 是上滑，2 是下滑
 static mut DELEGATE : Option<Vec<fn()>> = None;
 
 struct InputBuffer<T> {
@@ -59,12 +52,14 @@ impl<T : Copy> InputBuffer<T> {
     }
 }
 
-static mut MOUSE_POSITION : InputBuffer<ScalePoint>
-    = InputBuffer::<ScalePoint>::new(ScalePoint::new());
-static mut KEY_PRESS : InputBuffer<u16>
-    = InputBuffer::<u16>::new(0);
-static mut KEY_RELEASE : InputBuffer<u16>
-    = InputBuffer::<u16>::new(0);
+static mut MOUSE_X : InputBuffer<usize>
+    = InputBuffer::<usize>::new(0);
+static mut MOUSE_Y : InputBuffer<usize>
+    = InputBuffer::<usize>::new(0);
+static mut KEY_PRESS : InputBuffer<usize>
+    = InputBuffer::<usize>::new(0);
+static mut KEY_RELEASE : InputBuffer<usize>
+    = InputBuffer::<usize>::new(0);
 
 pub fn init(){
     unsafe {
@@ -72,37 +67,49 @@ pub fn init(){
     }
 }
 
-pub fn get_mouse_position()->ScalePoint{
+pub fn get_mouse_x()->usize {
     unsafe {
-        MOUSE_POSITION.borrow_mut().get_cur()
+        MOUSE_X.get_cur()
     }
 }
 
-pub fn add_mouse_position(point : ScalePoint){
+pub fn get_mouse_y()->usize {
     unsafe {
-        MOUSE_POSITION.borrow_mut().push(point);
+        MOUSE_Y.get_cur()
     }
 }
 
-pub fn get_key_press()->Option<u16>{
+pub fn add_mouse_x(val:usize) {
+    unsafe {
+        MOUSE_X.push(val)
+    }
+}
+
+pub fn add_mouse_y(val:usize) {
+    unsafe {
+        MOUSE_Y.push(val)
+    }
+}
+
+pub fn get_key_press()->Option<usize>{
     unsafe {
         KEY_PRESS.pop()
     }
 }
 
-pub fn add_key_press(v : u16){
+pub fn add_key_press(v : usize){
     unsafe {
         KEY_PRESS.push(v);
     }
 }
 
-pub fn get_key_release()->Option<u16>{
+pub fn get_key_release()->Option<usize>{
     unsafe {
         KEY_RELEASE.pop()
     }
 }
 
-pub fn add_key_release(v : u16){
+pub fn add_key_release(v : usize){
     unsafe {
         KEY_RELEASE.push(v);
     }
@@ -116,7 +123,7 @@ pub fn register(f : fn()) {
     }
 }
 
-pub fn add_scroll(v : u16){
+pub fn add_scroll(v : usize){
     unsafe {
         SCROLL[SCROLL_CUR_IDX] = v;
         SCROLL_CUR_IDX = (SCROLL_CUR_IDX + 1) % QUEUE_SIZE;
@@ -128,7 +135,7 @@ pub fn add_scroll(v : u16){
     }
 }
 
-pub fn get_scroll()->u16{
+pub fn get_scroll()->usize{
     unsafe {
         let idx = SCROLL_GET_IDX;
         if SCROLL_GET_IDX != SCROLL_CUR_IDX{
@@ -141,5 +148,9 @@ pub fn get_scroll()->u16{
     }
 }
 
-
+pub fn get_mouse_position()->ScalePoint {
+    let x = get_mouse_x();
+    let y = get_mouse_y();
+    ScalePoint::convert(x, y)
+}
 

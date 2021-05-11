@@ -95,9 +95,9 @@ impl<T1:Copy> Block<T1> {
     }
 
     pub fn array<T>(&self, st : usize, len : usize)->&'static mut [T] {
-        let len = min(self.size, len) * size_of::<T1>();
+        let len = min(self.size * size_of::<T1>(), len * size_of::<T>());
         let t = slice_from_raw_parts(
-            unsafe {self.addr.add(st)} as *mut T, len);
+            unsafe {self.addr.add(st)} as *mut T, len / size_of::<T>());
         unsafe {&mut *(t as *mut [T])}
     }
 }

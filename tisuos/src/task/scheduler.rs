@@ -19,13 +19,27 @@ impl Scheduler {
 }
 
 impl SchedulerOp for Scheduler {
-    fn schedule<T:super::task_manager::TaskPoolBasicOp>(&mut self, task_pool :&mut T)->Option<usize> {
+    fn schedule<T:super::require::TaskPoolBasicOp>(&mut self, task_pool :&mut T)->Option<usize> {
         let next;
         match self.method {
             ScheduleMethod::Rotation => {
-                next = task_pool.find(|info| {
-                    info.state == TaskState::Waiting
+                let mut id = None;
+                let mut mx = 0;
+                task_pool.operation_all(|info|{
+                    if info.state == TaskState::Waiting {
+                        if mx <= info.priority {
+                            id = Some(info.tid);
+                            mx = info.priority;
+                            info.priority += 1;
+                        }
+                    }
                 });
+                next = id;
+                if let Some(next) = next {
+                    task_pool.set_task_exec(next, |info|{
+                        info.priority = 0;
+                    }).unwrap();
+                }
             }
         }
         next

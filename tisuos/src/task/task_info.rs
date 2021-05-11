@@ -2,10 +2,7 @@
 //! 
 //! 2021年2月6日 zg
 
-use crate::{interrupt::trap::Environment, memory::map::SATP};
-use alloc::{collections::VecDeque};
-use tisu_sync::ContentMutex;
-
+use crate::{interrupt::environment::Environment, memory::map::SATP};
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum TaskState {
     Running,
@@ -14,12 +11,15 @@ pub enum TaskState {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct ExecutionInfo {
+    pub priority : usize,
     pub pid : usize,
     pub tid : usize,
     pub state : TaskState,
     pub is_kernel : bool,
+    pub is_main : bool,
+    pub trigger_time : usize,
     pub stack_top : *mut u8,
     pub env : Environment,
 }
@@ -32,26 +32,4 @@ pub struct ProgramInfo {
     pub is_kernel : bool,
 }
 
-
-pub struct PipeUnit {
-    pub tid : usize,
-    pub val : ContentMutex<VecDeque<usize>>,
-}
-
-impl PipeUnit {
-    pub fn new(tid : usize)->Self {
-        Self {
-            tid : tid,
-            val : ContentMutex::new(VecDeque::<usize>::new()),
-        }
-    }
-
-    pub fn push(&mut self, val : usize) {
-        self.val.lock().push_back(val);
-    }
-
-    pub fn pop(&mut self)->Option<usize> {
-        self.val.lock().pop_front()
-    }
-}
 

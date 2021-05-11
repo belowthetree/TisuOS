@@ -23,58 +23,12 @@ extern crate alloc;
 
 pub static mut M : SpinMutex = SpinMutex::new();
 
-#[macro_export]
-macro_rules! print {
-    ($($args:tt)+) => ({
-        use core::fmt::Write;
-        let _ = write!(crate::uart::Uart::new(), $($args)+);
-    });
-}
-
-#[macro_export]
-macro_rules! println
-{
-	() => ({
-		   print!("\r\n")
-		   });
-	($fmt:expr) => ({
-			print!(concat!($fmt, "\r\n"))
-			});
-	($fmt:expr, $($args:tt)+) => ({
-			print!(concat!($fmt, "\r\n"), $($args)+)
-			});
-}
-
-#[lang = "eh_personality"] extern fn eh_personality() {}
-
-#[panic_handler]
-fn panic(_info :& PanicInfo) -> ! {
-    println!("Panic! ");
-    if let Some(p) = _info.location() {
-		println!("{:?}: {}", p, _info.message().unwrap());
-	}
-    else {
-        println!("no information");
-    }
-    abort();
-}
-
-#[no_mangle]
-extern "C" fn abort() -> !{
-    loop{
-        unsafe{
-            asm!("wfi");
-        }
-    }
-}
-
 #[no_mangle]
 extern "C" fn kernel_init(){
     Uart::new().init();
     trap::init(0);
     memory::init();
     // memory::test();
-    console_input::init();
     plic::init();
     task::init();
     input_buffer::init();
@@ -88,6 +42,7 @@ extern "C" fn kernel_start(hartid : usize){
     trap::init(hartid);
 }
 
+#[macro_use]
 mod uart;
 mod plic;
 mod cpu;
@@ -99,10 +54,10 @@ mod interact;
 mod virtio;
 mod filesystem;
 mod graphic;
-use interact::console_input;
+mod panic;
+mod desktop;
 use interrupt::trap;
 use task::process;
 use tisu_sync::SpinMutex;
 use uart::Uart;
 use virtio::input_buffer;
-use core::panic::PanicInfo;

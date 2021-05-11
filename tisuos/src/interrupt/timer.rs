@@ -4,7 +4,7 @@
 //! 2020年12月12日 zg
 
 #![allow(dead_code)]
-static FREQUENCY    : usize = 1000_0000;
+pub const FREQUENCY    : usize = 1000_0000;
 static MTIMECMP     : usize = 0x200_4000;
 static MTIME        : usize = 0x200_BFF8;
 static INTERVAL     : u64 = 15_0000;
@@ -30,6 +30,13 @@ pub fn get_million_time()->usize{
     unsafe {
         let mtime = MTIME as *mut u64;
         mtime.read_volatile() as usize / (FREQUENCY / 1000)
+    }
+}
+
+pub fn get_micro_time()->usize {
+    unsafe {
+        let mtime = MTIME as *mut u64;
+        mtime.read_volatile() as usize
     }
 }
 

@@ -1,3 +1,7 @@
+//! # 页表管理器
+//!
+//! 2021年4月 zg
+
 use tisu_memory::MemoryOp;
 
 use crate::memory::get_manager;
@@ -99,10 +103,14 @@ impl PageTable {
             pte_mid.set_valid();
         }
         let table_final = unsafe {&mut *(pte_mid.get_ppn() as *mut Self)};
+        let addr = table_final as *const PageTable as usize;
         let pte_final = &mut table_final.entry[vpn[2]];
         pte_final.flag = 0;
         pte_final.set_leaf_ppn(physic_addr as u64);
         pte_final.set_flag(flag);
+        if physic_addr == 0x84471000 {
+            println!("pa {:x}, flag {:x} {:x}", physic_addr, pte_final.flag, addr);
+        }
         pte_final.set_valid();
     }
 

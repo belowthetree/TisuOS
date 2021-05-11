@@ -6,7 +6,21 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-#[lib]
-#crate-type = ["staticlib"]
 
 [dependencies]
+# tisu-sync = { path = "../../tisu-sync" }
+# tisu-memory = { path = "../../tisu-memory" }
+# tisu-driver = { path = "../../tisu-driver" }
+# tisu-fs = { path = "../../tisu-fs" }
+# virtio-input-decoder = { path = "../../virtio-input-decoder" }
+# device-buffer = { path = "../../device-buffer" }
+# tianmu-fs = { path = "../../tianmu-fs" }
+# fs-format = { path = "../../fs-format" }
+tisu-sync = { git = "https://github.com/TisuOS/tisu-sync", tag = "v2.0" }
+tisu-memory = { git = "https://github.com/TisuOS/tisu-memory", tag = "v3.0" }
+tisu-driver = { git = "https://github.com/TisuOS/tisu-driver", tag = "v3.0" }
+tisu-fs = { git = "https://github.com/TisuOS/tisu-fs", tag = "v4.0" }
+device-buffer = { git = "https://github.com/TisuOS/device-buffer", tag = "v4.0" }
+virtio-input-decoder = "0.1.4"
+tianmu-fs = { git = "https://github.com/TisuOS/tianmu-fs", tag = "v1.0" }
+fs-format = { git = "https://github.com/TisuOS/fs-format", tag = "v4.0" }

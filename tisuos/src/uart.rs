@@ -12,16 +12,38 @@ use crate::M;
 pub const UART_ADDR : usize = 0x1000_0000;
 const LSR_OFFSET : usize = 5;
 
+#[macro_export]
+macro_rules! print {
+    ($($args:tt)+) => ({
+        use core::fmt::Write;
+        let _ = write!(crate::uart::Uart::new(), $($args)+);
+    });
+}
+
+#[macro_export]
+macro_rules! println
+{
+	() => ({
+		   print!("\r\n")
+		   });
+	($fmt:expr) => ({
+			print!(concat!($fmt, "\r\n"))
+			});
+	($fmt:expr, $($args:tt)+) => ({
+			print!(concat!($fmt, "\r\n"), $($args)+)
+			});
+}
+
 pub struct Uart;
 /// 继承 Write Trait 使得 print 宏得以使用
-/// 字符转换等由 Rust 提供，非常方便
+/// 字符转换等由 Rust 提供，非常方便，为了防止多核并行输出乱序，使用自旋锁
 impl Write for Uart {
 	fn write_str(&mut self, out: &str) -> Result<(), Error> {
-        unsafe {M.lock()}
+        unsafe {M.lock_no_int()}
 		for c in out.bytes() {
 			self.put(c);
 		}
-        unsafe {M.unlock()}
+        unsafe {M.unlock_no_int()}
 		Ok(())
 	}
 }
@@ -71,7 +93,7 @@ impl Uart {
     }
     /// ## 输出
     /// 通过 MMIO 的方式
-    pub fn put(&mut self, c : u8) {
+    pub fn put(&self, c : u8) {
         unsafe {
             let ptr = UART_ADDR as *mut u8;
             ptr.add(0).write_volatile(c);

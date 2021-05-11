@@ -67,11 +67,15 @@ m_trap_vector:
 	li		t1, 0x20000
 	mul		t1, t1, a2
 	sub		sp, sp, t1
+	li		t0, 2
+	csrc	sscratch, t0
 	call	m_trap
 	# When we get here, we've returned from m_trap, restore registers
 	# and return.
 	# m_trap will return the return address via a0.
 
+	li		t0, 2
+	csrs	sscratch, t0
 	csrw	mepc, a0
 
 	# Now load the trap frame back into t6
@@ -101,9 +105,16 @@ make_syscall:
 	ecall
 	ret
 
+.global make_syscall_long
+make_syscall_long:
+	ecall
+	ret
+
 # a0: *mut Environment
 .global switch_user_process
 switch_user_process:
+	li		t0, 2
+	csrs	sscratch, t0
 	mv		t6, a0
 	ld		t0, 512(t6)
 	csrw 	satp, t0
@@ -134,6 +145,8 @@ switch_user_process:
 
 .global switch_kernel_process
 switch_kernel_process:
+	li		t0, 2
+	csrs	sscratch, t0
 	mv		t6, a0
 	ld		t0, 512(t6)
 	csrw 	satp, t0

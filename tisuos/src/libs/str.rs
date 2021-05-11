@@ -4,6 +4,41 @@
 
 #![allow(dead_code)]
 
+pub fn write_str(ptr : *mut char, s : &String, len : usize) {
+    let bytes = s.as_bytes();
+    for i in 0..len {
+        if i < s.len() {
+            unsafe {
+                ptr.add(i).write_volatile(bytes[i] as char);
+            }
+        }
+        else {
+            unsafe {
+                ptr.add(i).write_volatile('\0' as char);
+                break;
+            }
+        }
+    }
+}
+
+pub fn from_ptr(ptr : *const char)->String {
+    let mut rt = String::new();
+    let mut idx = 0;
+    while unsafe {*(ptr.add(idx))} != '\0' {
+        rt.push(unsafe {*(ptr.add(idx))});
+        idx += 1;
+    }
+    rt
+}
+
+pub fn to_char_slice(s : &String)->Vec<char> {
+    let mut v = Vec::new();
+    for c in s.bytes() {
+        v.push(c as char);
+    }
+    v
+}
+
 pub fn usize_to_str(num : usize)->String {
     let mut rt = String::new();
     let mut num = num;
@@ -126,4 +161,4 @@ pub fn char_to_str(cs : &[char])->String {
     rt
 }
 
-use alloc::{prelude::v1::*};
+use alloc::prelude::v1::*;

@@ -34,7 +34,7 @@ NET_DEVICE = -device virtio-net-device
 GPU_DEVICE = -device virtio-gpu-device
 
 build: env
-	cargo build --target=riscv64gc-unknown-none-elf
+	cargo +nightly build --target=riscv64gc-unknown-none-elf
 # $(CC) $(CFLAGS) $(LINKER_SCRIPT) $(INCLUDES) -o $(OUT) $(SOURCES_ASM) $(LIBS) $(LIB)
 
 env:
@@ -50,7 +50,9 @@ graphic: build
 	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM) $(DEVICE) $(GPU_DEVICE) \
 	-serial mon:stdio -bios none -kernel $(KERNEL_ELF)
 
+objdump:
+	riscv64-unknown-elf-objdump -d target/riscv64gc-unknown-none-elf/debug/tisuos > os.txt
+
 .PHONY: clean
 clean:
 	cargo clean
-	rm -f $(OUT)

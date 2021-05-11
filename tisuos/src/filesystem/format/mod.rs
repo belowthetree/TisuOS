@@ -2,16 +2,21 @@
 //! 
 //! 2021年1月31日 zg
 
-use alloc::prelude::v1::*;
+use alloc::{prelude::v1::*, sync::Arc};
 use tisu_fs::{DiskInfo, FileSystem, Leaf, LeafType};
-
 use crate::virtio::disk_cache::get_cache;
-
 use self::fat32::{Attribute, FATManger};
+
+use super::syscall_io::get_id_mgr;
 
 
 pub mod fat32;
 pub mod tianmu;
+pub mod elf;
+mod disk_type;
+
+pub use disk_type::*;
+
 
 impl FATManger {
     pub fn parse_dir(&mut self, dir_idx : usize)->Option<Vec<Leaf>> {
@@ -49,17 +54,13 @@ impl FATManger {
         }
         Some(rt)
     }
+
+    pub fn to_system(mgr : Arc<Self>)->tisu_fs::FileSystem {
+        FileSystem::new(get_cache(), mgr.clone(), get_id_mgr(), mgr.block_idx)
+    }
 }
 
 impl tisu_fs::Format for fat32::FATManger {
-    fn to_system(&self)->tisu_fs::FileSystem {
-        let t;
-        unsafe {
-            t = &mut *(self as *const Self as *mut Self);
-        }
-        FileSystem::new(get_cache(), t, 1)
-    }
-
     fn parse_node(&self, block_idx : usize)->Result<Vec<Leaf>, ()> {
         let mut rt = Vec::new();
         unsafe {
@@ -90,5 +91,9 @@ impl tisu_fs::Format for fat32::FATManger {
             root_directory_block_idx: 2,
             block_start_addr: self.cluster_start_addr,
         }
+    }
+
+    fn get_device(&self) ->usize {
+        self.block_idx
     }
 }

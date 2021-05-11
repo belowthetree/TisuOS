@@ -1,42 +1,27 @@
 //! # Trap
 //! 中断管理部分，包括环境结构，各类中断处理
 //! 2020年11月 zg
-#[allow(dead_code)]
-pub enum Register{
-    RA = 1,
-    SP = 2,
-    A0 = 10,
-    A1 = 11,
-    A2 = 12,
-    A3 = 13,
-}
-impl Register {
-    pub fn val(self)->usize{
-        self as usize
-    }
-}
-/// 保存需要恢复的环境
-#[allow(dead_code)]
-#[derive(Copy, Clone, Debug)]
-pub struct Environment{
-    pub regs    :     [usize;32], // 0 ~ 255
-    fregs       :     [usize;32], // 256 ~ 511
-    pub satp    :     usize,      // 512
-    pub epc     :     usize,      // 520
-    pub hartid  :     usize,      // 528
-}
 
-impl Environment {
-    pub const fn new()->Self{
-        Environment{
-            regs : [0;32],
-            fregs :[0;32],
-            satp:  0,
-            epc:   0,
-            hartid: 0,
-        }
-    }
-}
+const INSTRUCTION_ADDRESS_MISALIGNED    : usize = 0;
+const INSTRUCTION_ACCESS_FAULT          : usize = 1;
+const ILLEGAL_INSTRUCTION               : usize = 2;
+const BREAKPOINT                        : usize = 3;
+const LOAD_ACCESS_FAULT                 : usize = 5;
+const STORE_ADDRESS_MISALIGNED          : usize = 6;
+const STORE_ACCESS_FAULT                : usize = 7;
+const USER_ENVIRONMENT_CALL             : usize = 8;
+const SUPERVISOR_ENVIRONMENT_CALL       : usize = 9;
+const MACHINE_ENVIRONMENT_CALL          : usize = 11;
+const INSTRUCTION_PAGE_FAULT            : usize = 12;
+const LOAD_PAGE_FAULT                   : usize = 13;
+const STORE_PAGE_FAULT                  : usize = 15;
+const MACHINE_SOFTWARE                  : usize = 3;
+const SUPERVISOR_SOFTWARE               : usize = 1;
+const SUPERVISOR_TIMER                  : usize = 5;
+const MACHINE_TIMER                     : usize = 7;
+const SUPERVISOR_EXTERNAL               : usize = 9;
+const MACHINE_EXTERNAL                  : usize = 11;
+
 global_asm!(include_str!("../asm/func.S"));
 
 pub static mut ENVS : [Environment;4] = [Environment::new();4];
@@ -79,58 +64,47 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
             }
         }
         match num {
-            0 => {
-                panic!("Instruction address misaligned CPU:{:016x} at epc:{:016x}\n", 
-                    hartid, pc);
-            },
-            1 => {
-                panic!("Instruction access fault CPU:{:016x} at epc:{:016x}", hartid, pc);
-            }
-            2 => {
-                panic!("Illegal instruction CPU:{:016x} at epc:{:016x}", hartid, pc);
-            }
-            3 => {
+            INSTRUCTION_ADDRESS_MISALIGNED => panic!("Instruction address misaligned"),
+            INSTRUCTION_ACCESS_FAULT => panic!("Instruction access fault"),
+            ILLEGAL_INSTRUCTION => panic!("Illegal instruction"),
+            BREAKPOINT => {
                 println!("Breakpoint");
                 pc += 2;
             }
-            5 => {
-                panic!("Load access fault CPU:{} at epc:{:016x}", hartid, pc);
-            }
-            6 => {
-                panic!("Store address misalign {}", 0);
-            }
-            7 => {
-                panic!("Store access fault CPU:{:016x} at epc:{:016x}", hartid, pc);
-            }
-            8 | 9 | 11 => {
+            LOAD_ACCESS_FAULT => panic!("Load access fault"),
+            STORE_ADDRESS_MISALIGNED => panic!("Store address misalign"),
+            STORE_ACCESS_FAULT => panic!("Store access fault"),
+            MACHINE_ENVIRONMENT_CALL => {
+                // env.regs[Register::A0.val()] = syscall::handler(env);
+                pc += 4;
+            },
+            SUPERVISOR_ENVIRONMENT_CALL|USER_ENVIRONMENT_CALL=> {
+                let num = env.a0();
                 env.regs[Register::A0.val()] = syscall::handler(env);
-                // println!("syscall rt {}", env.regs[Register::A0.val()]);
-                let mgr = get_task_mgr().unwrap();
-                env.epc += 4;
-                mgr.schedule(env);
-                write_satp(0);
-                pc = waiting as usize;
+                if num == 25 || num == 26 {
+                    pc += 4;
+                }
+                else {
+                    // println!("syscall {} rt {}", num, env.regs[Register::A0.val()]);
+                    let mgr = get_task_mgr().unwrap();
+                    env.epc += 4;
+                    mgr.schedule(env);
+                    // println!("ecall fail");
+                    write_satp(0);
+                    pc = waiting as usize;
+                }
             }
-            12 => {
-                panic!("Instruction page fault {}", 0);
-            }
-            13 => {
-                panic!("Load page fault");
-            }
-            15 => {
-                panic!("Store page fault epc {:x}", env.epc);
-            }
-            _ => {
-                println!("into m_trap cause: {:x}, hartid: {:x}, status: {:x}, epc: {:x}, sp: {:x}, satp {:x}",
-                    cause, hartid, _status, env.epc, _sp, env.satp);
-                panic!("unknown sync number: {:016x}", num);
-            }
+            INSTRUCTION_PAGE_FAULT => panic!("Instruction page fault"),
+            LOAD_PAGE_FAULT => panic!("Load page fault"),
+            STORE_PAGE_FAULT => panic!("Store page fault"),
+            _ => panic!("unknown sync number: {:016x}", num),
         }
     }
     else {
         match num {
             // 软件中断
-            3 => {
+            SUPERVISOR_SOFTWARE => println!("supervisor software"),
+            MACHINE_SOFTWARE => {
                 // println!("Machine software interrupt CPU:{:016x}", hartid);
                 unsafe {
                     let ptr = 0x200_0000 as *mut u32;
@@ -140,10 +114,8 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                 write_satp(0);
                 pc = waiting as usize;
             },
-            5 => {
-                println!("Machine timer interrupt");
-            }
-            7 => {
+            SUPERVISOR_TIMER => println!("Machine timer interrupt"),
+            MACHINE_TIMER => {
                 timer::set_next_timer();
                 unsafe {
                     let ptr = 0x2000000 as *mut u32;
@@ -155,7 +127,8 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                 write_satp(0);
                 pc = waiting as usize;
             },
-            11 => {
+            SUPERVISOR_EXTERNAL => println!("supervisor external"),
+            MACHINE_EXTERNAL => {
                 plic::handler();
             }
             _ => {
@@ -167,6 +140,6 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
 }
 
 
-use crate::{libs::cpu::write_satp, memory::config::{KERNEL_STACK_END, KERNEL_STACK_START}, task::{get_task_mgr}};
+use crate::{interrupt::environment::Register, libs::cpu::write_satp, memory::config::{KERNEL_STACK_END, KERNEL_STACK_START}, task::{get_task_mgr}};
 use crate::{plic, cpu};
-use super::{syscall, timer};
+use super::{environment::Environment, syscall, timer};

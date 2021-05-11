@@ -1,6 +1,7 @@
 //! # 内存管理
-//! 采用对齐内存方式分配堆栈
-//! 内存分页进行管理，提供详细的内存操作支持
+//! 内存分为物理内存、虚拟内存管理
+//! 目前内存分配以页面为基础，然后形成内存池
+//! 程序的内存申请交由堆内存进行管理
 //! 
 //! 2021年1月25日 zg
 
@@ -11,9 +12,13 @@ use tisu_memory::{MemoryOp, PageManager, Heap};
 use core::alloc::{GlobalAlloc, Layout};
 
 pub mod block;
-pub mod user_allocator;
+pub mod heap_memory;
 pub mod config;
 pub mod map;
+mod program_memory;
+mod stack_memory;
+
+pub use program_memory::*;
 
 type MemoryManager = tisu_memory::MemoryManager<PageManager, Heap<PageManager>>;
 
@@ -26,6 +31,7 @@ pub fn init(){
 			HEAP_START, KERNEL_PAGE_NUM, PAGE_SIZE, MEMORY_END
 		));
 		USER_HEAP_START = HEAP_START + KERNEL_PAGE_NUM * PAGE_SIZE;
+		println!("st {:x}, user {:x}, ed {:x}", HEAP_START, USER_HEAP_START, MEMORY_END);
 	}
 	// test();
 }
@@ -60,15 +66,6 @@ pub fn print() {
 		if let Some(mgr) = &mut MANAGER {
 			mgr.print();
 		}
-	}
-}
-
-pub fn alloc(size : usize, is_kernel : bool)->Option<*mut u8> {
-	unsafe {
-		if let Some(mgr) = &mut MANAGER {
-			mgr.alloc_memory(size, is_kernel)
-		}
-		else{None}
 	}
 }
 

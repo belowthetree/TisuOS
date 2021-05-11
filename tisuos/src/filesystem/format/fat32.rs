@@ -6,7 +6,7 @@
 
 
 pub const FLAG_END : u32 = 0x0fffffff;
-static mut DEBUG : bool = false;
+
 /// ## FATInfo
 /// 处理 FAT32 格式的磁盘信息
 #[derive(Clone, Copy)]
@@ -59,7 +59,7 @@ pub struct FATManger{
     pub cluster_start_addr : usize,
     pub block_idx : usize,
     pub bpb : BPB,
-    buf : Block<u8>,
+    buf : Block<FATItem>,
 }
 
 impl FATManger {
@@ -73,14 +73,14 @@ impl FATManger {
         FATManger{
             fat_addr : info.get_fat_addr(),
             fat_total_size : info.get_fat_size(),
-            total_cluster : total_cluster,
+            total_cluster,
             fat_num : info.bpb.fat_num as usize,
             root_dir_cluster_addr : info.get_directory_addr(),
             cluster_start_addr : info.get_directory_addr() - cluster_size * 2,
-            cluster_size : cluster_size,
-            block_idx : block_idx,
+            cluster_size,
+            block_idx,
             bpb : info.bpb.clone(),
-            buf : Block::<u8>::new(cluster_size),
+            buf : Block::<FATItem>::new(1),
         }
     }
 
@@ -89,11 +89,7 @@ impl FATManger {
         let st = self.fat_addr as usize + cluster * size_of::<FATItem>();
         sync_read_buffer(self.block_idx,
             self.buf.to_array(0, size_of::<FATItem>()), st);
-        unsafe{
-            Some(
-                (*(self.buf.get_addr() as *mut FATItem)).clone()
-            )
-        }
+        self.buf.get(0)
     }
 
     pub fn get_total_size(&self) ->usize{
@@ -295,7 +291,7 @@ impl FATManger {
         for cluster in clusters {
             let addr = st + (cluster - 2) * self.cluster_size;
             let buffer = Block::<u8>::new(self.cluster_size);
-            sync_read_buffer(self.block_idx, 
+            sync_read_buffer(self.block_idx,
                 buffer.to_array(0, self.cluster_size), addr);
             let buffer = buffer.convert::<FATShortDirItem>();
             for idx in 0..cluster_num {
@@ -316,9 +312,6 @@ impl FATManger {
     pub fn get_all_cluster(&mut self, start_cluster : usize) ->Option<Vec::<usize>> {
         let mut rt = Vec::<usize>::new();
         let mut num = start_cluster;
-        unsafe {
-            DEBUG = true;
-        }
         loop {
             let item = self.get_fat_item(num).unwrap();
             rt.push(num);
@@ -339,7 +332,7 @@ impl FATManger {
     }
 
 }
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct FATItem{
     item : u32,
 }

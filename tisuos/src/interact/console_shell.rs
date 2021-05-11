@@ -12,24 +12,24 @@ pub struct ConsoleShell {
 
 impl ConsoleShell {
     pub fn new()->Self {
+        println!("\ntype help to get some infomation\n");
+        print!(">>");
         Self {
             directory : None,
             buffer : String::new(),
         }
     }
 
+    /// 处理输入形成命令字符串
     pub fn make_command(&mut self) {
-        let mut c = self.get_input();
-        if c.is_none() {
-            return;
-        }
-        
-        while c.is_some() {
-            output(c.unwrap() as u8);
-            match c.unwrap() {
+        while let Some(c) = self.get_input() {
+            output(c as u8);
+            match c {
                 '\n' | '\r' => {
                     self.do_command(&self.buffer.clone());
                     self.buffer.clear();
+                    output('>' as u8);
+                    output('>' as u8);
                 }
                 c => {
                     if c as u8 == 127 {
@@ -40,41 +40,15 @@ impl ConsoleShell {
                     }
                 }
             }
-            c = self.get_input();
         }
     }
 
+    /// 命令执行部分
+    /// 大部分是测试用例
     pub fn do_command(&mut self, cmd : &String) {
         let s : Vec<&str> = cmd.split(' ').collect();
         if s.len() == 2{
             match s[0] {
-                "draw" => {
-                    if gpu_support() {
-                        if let Some(dir) = &self.directory {
-                            let sys = get_system(dir.device_id).unwrap();
-                            let path = dir.path.clone() + "/" + s[1];
-                            let file = sys.open(path.clone(), FileFlag::Read).unwrap().clone();
-                            let data = Block::<u8>::new(file.size);
-                            sys.read(file.id, data.to_array(0, file.size)).unwrap();
-                            let mut img = BMP::decode(
-                                data.to_array(0, file.size)).unwrap();
-                            img.resize(100, 100);
-                            let ptr = img.data.as_mut_slice();
-                            let ptr = ptr as *mut [Pixel] as *mut Pixel;
-                            println!("draw {}, w {} h {}", path, img.width, img.height);
-                            draw_rect_override(0, Rect {
-                                x1: 0,
-                                y1: 0,
-                                x2: img.width as u32,
-                                y2: img.height as u32,
-                            }, ptr);
-                            invalid();
-                        }
-                    }
-                    else {
-                        println!("no graphic");
-                    }
-                }
                 "cd" => {
                     if let Some(dir) = &self.directory {
                         let sys = get_system(dir.device_id).unwrap();
@@ -92,19 +66,26 @@ impl ConsoleShell {
                 }
                 "readelf" =>{
                     if let Some(dir) = &self.directory {
-                        let sys = get_system(dir.device_id).unwrap();
-                        let file = 
-                            sys.open(s[1].to_string(), FileFlag::Read).unwrap().clone();
-                        let data = Block::<u8>::new(file.size);
-                        sys.read(file.id, data.to_array(0, file.size)).unwrap();
+                        let path : String = dir.path.clone() + &s[1];
+                        let id = open(
+                            dir.device_id.to_string() + &path[..], FileFlag::Read.val());
+                        println!("get file id {}", id);
+                        let path = dir.device_id.clone().to_string() + &path[..];
+                        let addr = file_info(path) as *const FileInfo;
+                        let info = unsafe {(*addr).clone()};
+                        println!("{:x}\n{:?}", addr as usize, info);
+                        let data = Block::<u8>::new(info.size);
+                        let len = read(info.id, data.to_array(0, info.size));
                         let elf = data.type_as::<ELF>();
-                        println!("{:x?}", elf);
+                        println!("read len {}\n{:x?}", len, elf);
+                        free(addr as usize);
                     }
                 }
                 "exec" => {
                     if let Some(dir) = &self.directory {
-                        println!("exec {}", dir.path.clone() + s[1]);
-                        exec("0".to_string() + &dir.path[..] + s[1]);
+                        let id = exec(
+                            dir.device_id.to_string() + &dir.path[..] + s[1]);
+                        wait(id);
                     }
                 }
                 "cat" => {
@@ -127,6 +108,32 @@ impl ConsoleShell {
         }
         else if s.len() == 1 {
             match s[0] {
+                "readdir" => {
+                    let ptr = directory_info("0/".to_string());
+                    let info = unsafe {&mut *(ptr as *mut filesystem::DirectoryInfo)};
+                    println!("get info {:?}", info);
+                    for i in 0..info.file_num {
+                        let offset = i * 15 * size_of::<char>() + size_of::<filesystem::DirectoryInfo>();
+                        println!("{}", from_ptr((ptr + offset) as *const char));
+                    }
+                }
+                "help" => {
+                    println!("
+# use cddisk # to enter disk first
+# use readelf to read elf infomation
+# use exec to execute a binary
+# use cat to watch one files content
+# use ls to see current directory's infomation
+                    ");
+                }
+                "draw" => {
+                    let data = Block::<Pixel>::new(100);
+                    let buffer = data.array(0, 100);
+                    for i in 0..buffer.len() {
+                        buffer[i] = Pixel::red();
+                    }
+                    draw_rect(0, 0, 10, 10, buffer);
+                }
                 "curdir" => {
                     if let Some(dir) = &self.directory {
                         println!("{}", dir.path);
@@ -137,20 +144,19 @@ impl ConsoleShell {
                 }
                 "ls" => {
                     if let Some(tree) = &self.directory{
-                        print!("directory: ");
+                        output_str(&"directory: ".to_string());
                         for item in tree.item.iter() {
                             if item.itype == DirItemType::Directory {
-                                print!("{} ", item.name);
+                                output_str(&(item.name.clone() + " "));
                             }
                         }
-                        println!();
-                        print!("file: ");
+                        output_str(&"\nfile: ".to_string());
                         for item in tree.item.iter() {
                             if item.itype == DirItemType::File {
-                                print!("{} ", item.name);
+                                output_str(&(item.name.clone() + " "));
                             }
                         }
-                        println!();
+                        output('\n' as u8);
                     }
                 }
                 "lsdisk" => {
@@ -169,7 +175,7 @@ impl ConsoleShell {
 
     /// ### 获取命令行输入
     fn get_input(&mut self)->Option<char> {
-        pop()
+        pop_input()
     }
 
 }
@@ -184,19 +190,27 @@ pub fn run() {
     }
 }
 
-fn output(c : u8){
-    match c {
-        10 | 13 => { println!(); }
-        127 => { 
-            print!("{} {}", 8 as char, 8 as char);
-        }
-        _ => { print!("{}", c as char); }
+fn output_str(s : &String) {
+    for c in s.bytes() {
+        output(c);
     }
 }
 
-use super::console_input::pop;
+fn output(c : u8){
+    match c {
+        10 | 13 => push_output('\n'),
+        127 => { 
+            push_output(8 as char);
+            push_output(' ');
+            push_output(8 as char);
+        }
+        _ => { push_output(c as char) }
+    }
+}
+
+use core::mem::size_of;
+
 use alloc::prelude::v1::*;
-use fs_format::BMP;
-use tisu_driver::{Pixel, Rect};
-use tisu_fs::{DirItemType, Directory, FileFlag};
-use crate::{filesystem::{elf::ELF, get_system}, libs::{str::convert_to_usize, syscall::{exec, list_thread}}, memory::block::Block, virtio::device::{draw_rect_override, gpu_support, invalid}};
+use tisu_driver::{Pixel};
+use tisu_fs::{DirItemType, Directory, FileFlag, SystemOp};
+use crate::{filesystem::{self, FileInfo, elf::ELF, get_system, pop_input, push_output}, libs::{str::{convert_to_usize, from_ptr}, syscall::{directory_info, draw_rect, exec, file_info, free, list_thread, open, read, wait}}, memory::block::Block};

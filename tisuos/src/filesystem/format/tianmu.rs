@@ -7,9 +7,10 @@ use core::mem::size_of;
 
 use tianmu_fs::{DirItem, SuperBlock};
 use tisu_fs::{DiskInfo, FileSystem, Format, Leaf, LeafType};
-use alloc::prelude::v1::*;
-use crate::{libs::bytes::{slice_to_string, slice_to_val}, memory::block::Block, virtio::disk_cache::get_cache};
+use alloc::{prelude::v1::*, sync::Arc};
+use crate::{filesystem::syscall_io::get_id_mgr, libs::bytes::{slice_to_string, slice_to_val}, memory::block::Block, virtio::disk_cache::get_cache};
 
+#[derive(Debug, Clone, Copy)]
 pub struct TianMu(pub fs_format::TianMu);
 
 impl TianMu {
@@ -19,16 +20,15 @@ impl TianMu {
         cache.read(device_id, sp.to_array(0, size_of::<SuperBlock>()), 0);
         Self(fs_format::TianMu::new(device_id, sp.get(0).unwrap()))
     }
+
+    pub fn to_system(tm : Arc<TianMu>)->FileSystem {
+        FileSystem::new(
+            get_cache(), tm.clone(), get_id_mgr(), tm.0.device_id)
+    }
+
 }
 
 impl Format for TianMu {
-    fn to_system(&self)->FileSystem {
-        unsafe {
-            let t = &mut *(self as *const Self as *mut Self);
-            FileSystem::new(get_cache(), t, self.0.device_id)
-        }
-    }
-
     fn parse_node(&self, block_idx : usize)->Result<Vec<tisu_fs::Leaf>, ()> {
         let mut rt = Vec::new();
         let data = Block::<DirItem>::new(1);
@@ -79,6 +79,10 @@ impl Format for TianMu {
             root_directory_block_idx: self.0.root_idx,
             block_start_addr: 0,
         }
+    }
+
+    fn get_device(&self)->usize {
+        self.0.device_id
     }
 }
 

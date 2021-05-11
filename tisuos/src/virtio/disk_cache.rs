@@ -1,7 +1,10 @@
+//! # 磁盘缓冲
+//! 作为磁盘读写的中介，每个磁盘都有相同数量的缓冲区。优先替换最近最少使用的缓冲区
+//!
+//! 2021年4月 zg
+
 use device_buffer::{Cache, CacheBuffer};
-
 use crate::memory::get_manager;
-
 use super::device::get_device;
 
 

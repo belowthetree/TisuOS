@@ -2,44 +2,47 @@
 //! 
 //! 2021年1月29日 zg
 
-pub mod elf;
 mod format;
-mod disk_info;
+mod fs_info;
+mod io_info;
+mod stdio;
+mod image_pool;
+pub mod syscall_io;
+pub mod io;
 
-use format::fat32;
-use tisu_fs::{FileSystem, Format};
+use tisu_fs::{FileSystem, IdManager, SystemOp};
+pub use fs_info::*;
+pub use stdio::*;
+pub use format::elf;
+pub use image_pool::request;
 
-#[allow(dead_code)]
-pub enum Mgr {
-    None,
-    FAT(FATManger),
-}
-
-pub static mut MANAGER : Option<Vec<Mgr>> = None;
+/// 一个文件系统对应一个磁盘
 pub static mut SYSTEM : Option<Vec<FileSystem>> = None;
+pub static mut FORMAT : Option<Vec<BlockType>> = None;
+static mut ID_MANAGER : Option<IdManager> = None;
 
 pub fn init(){
+    stdio::init();
     unsafe {
-        let mut infos = Vec::<Mgr>::new();
+        ID_MANAGER = Some(IdManager::new());
+        let mut ftype = Vec::new();
         let mut sys = Vec::new();
         for idx in 0..get_device().block_device.len(){
-            let info = DiskInfo::new(idx);
+            let info = DiskType::new(idx);
             match info.get_type() {
-                FAT32 => {
-                    let info = FATInfo::new(&info.head);
-                    let mgr = FATManger::new(&*info, idx);
-                    let system = mgr.to_system();
+                BlockType::FAT32(mgr) => {
+                    let system = FATManger::to_system(mgr.clone());
                     sys.push(system);
                     println!("disk {} is fat32, total size {}MB\t\t", idx, mgr.get_total_size() / 1024 / 1024);
                     // println!("used size {}MB\t\t", mgr.get_used_size() / 1024 / 1024);
-                    infos.push(Mgr::FAT(mgr));
+                    ftype.push(BlockType::FAT32(mgr));
                 }
-                disk_info::BlockType::TianMu => {
-                    let tm = TianMu::new(idx);
-                    let system = tm.to_system();
+                BlockType::TianMu(tm) => {
+                    let system = TianMu::to_system(tm.clone());
                     sys.push(system);
                     println!("disk {} is tianmu, total size {}MB",
                         idx, tm.0.total_size / 1024 / 1024);
+                    ftype.push(BlockType::TianMu(tm));
                 }
                 _ => {
                     println!("unknown filesystem");
@@ -47,12 +50,13 @@ pub fn init(){
                 }
             }
         }
+        FORMAT = Some(ftype);
         SYSTEM = Some(sys);
-        MANAGER = Some(infos);
     }
 }
 
-pub fn get_system(idx : usize)->Option<&'static mut FileSystem> {
+
+pub fn get_system(idx : usize)->Option<&'static mut impl SystemOp> {
     unsafe {
         if let Some(sys) = &mut SYSTEM {
             sys.get_mut(idx)
@@ -63,9 +67,22 @@ pub fn get_system(idx : usize)->Option<&'static mut FileSystem> {
     }
 }
 
-use crate::virtio::device::get_device;
+pub fn search_system(id : usize)->Option<&'static mut impl SystemOp> {
+    unsafe {
+        if let Some(sys) = &mut SYSTEM {
+            for sys in sys.iter_mut() {
+                if sys.contain(id) {
+                    return Some(sys);
+                }
+            }
+            None
+        }
+        else {
+            None
+        }
+    }
+}
+
+use crate::{filesystem::format::{fat32::FATManger, tianmu::TianMu}, virtio::device::get_device};
 use alloc::prelude::v1::*;
-use disk_info::DiskInfo;
-use fat32::FATInfo;
-use disk_info::BlockType::FAT32;
-use self::{fat32::FATManger, format::tianmu::TianMu};
+use self::{format::{BlockType, DiskType}};

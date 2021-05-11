@@ -3,35 +3,44 @@
 //! 2021年3月23日 zg
 
 
-use crate::{interrupt::trap::Environment};
+use crate::{interrupt::environment::Environment, memory::ProgramArea};
 use tisu_sync::ContentMutex;
-use super::{task_info::{ExecutionInfo, TaskState}, process::Process, task_manager::{TaskPoolBasicOp},
-    thread::Thread};
+use super::{process::Process, require::{TaskComplexOp, TaskPoolBasicOp, TaskPoolOp, TaskResourceOp, TaskScheduleOp}, task_info::{ExecutionInfo, TaskState}, thread::Thread};
 use alloc::{prelude::v1::*};
 use alloc::collections::BTreeMap;
 
 pub struct TaskPool {
-    pub process : ContentMutex<BTreeMap<usize, Process>>,
-    pub thread : ContentMutex<BTreeMap<usize, Thread>>,
+    process : ContentMutex<BTreeMap<usize, Process>>,
+    thread : ContentMutex<BTreeMap<usize, Thread>>,
+    waiting_list : ContentMutex<BTreeMap<usize, Vec<usize>>>,
+    wait_time_list : ContentMutex<BTreeMap<usize, usize>>,
+    time_list : ContentMutex<Vec<usize>>,
 }
 
 impl TaskPool {
     pub fn new()->Self {
         Self{
-            process : ContentMutex::new(BTreeMap::new()),
-            thread : ContentMutex::new(BTreeMap::new()),
+            process : ContentMutex::new(BTreeMap::new(), true),
+            thread : ContentMutex::new(BTreeMap::new(), true),
+            waiting_list : ContentMutex::new(BTreeMap::new(), true),
+            wait_time_list : ContentMutex::new(BTreeMap::new(), true),
+            time_list : ContentMutex::new(Vec::new(), true),
+
         }
     }
 }
 
+impl TaskPoolOp for TaskPool{}
+
+/// 为了防止死锁，线程必须先于进程上锁
 impl TaskPoolBasicOp for TaskPool {
-    fn create(&mut self, func : usize, is_kernel : bool)->Option<usize> {
-        let mut p = Process::new(is_kernel).unwrap();
-        let t = Thread::new(func, &p).unwrap();
-        let tid = t.tid;
-        p.tid.push(t.tid);
+    fn create(&mut self, program : ProgramArea)->Option<usize> {
+        let mut p = Process::new(program).unwrap();
+        let t = Thread::new(&p).unwrap();
+        let tid = t.info.tid;
+        p.tid.push(t.info.tid);
+        self.thread.lock().insert(t.info.tid, t);
         self.process.lock().insert(p.info.pid, p);
-        self.thread.lock().insert(t.tid, t);
 
         Some(tid)
     }
@@ -44,9 +53,9 @@ impl TaskPoolBasicOp for TaskPool {
         let src_th = thread.get_mut(&id).unwrap();
         src_th.save(env);
         let th = Thread::fork(src_th).unwrap();
-        let id = th.tid;
+        let id = th.info.tid;
         let mut process = self.process.lock();
-        let p = process.get_mut(&th.pid).unwrap();
+        let p = process.get_mut(&th.info.pid).unwrap();
         p.tid.push(id);
         thread.insert(id, th);
         Some(id)
@@ -60,23 +69,26 @@ impl TaskPoolBasicOp for TaskPool {
         let src_th = (*thread).get_mut(&id).unwrap();
         src_th.save(env);
         let th = Thread::branch(src_th).unwrap();
-        let id = th.tid;
+        let id = th.info.tid;
+        let pid = th.info.pid;
         (*thread).insert(id, th);
+        let mut process = self.process.lock();
+        process.get_mut(&pid).unwrap().tid.push(id);
         Some(id)
     }
 
     fn get_task_exec(&self, id : usize)->Option<ExecutionInfo> {
         let thread = self.thread.lock();
-        for (tid, th) in (*thread).iter() {
-            if *tid == id {
-                return Some(th.get_exec_info());
-            }
+        if let Some(th) = thread.get(&id) {
+            Some(th.get_exec_info())
         }
-        None
+        else {
+            None
+        }
     }
 
     fn get_task_prog(&self, id : usize)->Option<super::task_info::ProgramInfo> {
-        let id = self.thread.lock().get(&id).unwrap().pid;
+        let id = self.thread.lock().get(&id).unwrap().info.pid;
         let rt = self.process.lock().get(&id).unwrap().get_prog_info();
         Some(rt)
     }
@@ -85,7 +97,7 @@ impl TaskPoolBasicOp for TaskPool {
         let thread = self.thread.lock();
         let mut res = vec![];
         for (tid, t) in (*thread).iter() {
-            if f(&t.get_exec_info()) {
+            if f(&t.info) {
                 res.push(*tid);
             }
         }
@@ -100,24 +112,24 @@ impl TaskPoolBasicOp for TaskPool {
     fn find<F>(&mut self, f : F)->Option<usize> where F : Fn(&ExecutionInfo)->bool {
         let thread = self.thread.lock();
         for (tid, t) in (*thread).iter() {
-            if f(&t.get_exec_info()) {
+            if f(&t.info) {
                 return Some(*tid);
             }
         }
         None
     }
 
-    fn operation_all<F>(&mut self, mut f:F) where F:FnMut(&ExecutionInfo) {
-        let thread = self.thread.lock();
-        for (_, t) in (*thread).iter() {
-            f(&t.get_exec_info());
+    fn operation_all<F>(&mut self, mut f:F) where F:FnMut(&mut ExecutionInfo) {
+        let mut thread = self.thread.lock();
+        for (_, t) in (*thread).iter_mut() {
+            f(&mut t.info);
         }
     }
 
     fn operation_once<F>(&mut self, mut f:F) where F:FnMut(&ExecutionInfo)->bool {
-        let thread = self.thread.lock();
-        for (_, th) in (*thread).iter() {
-            if f(&th.get_exec_info()) {
+        let mut thread = self.thread.lock();
+        for (_, th) in (*thread).iter_mut() {
+            if f(&mut th.info) {
                 break;
             }
         }
@@ -126,9 +138,7 @@ impl TaskPoolBasicOp for TaskPool {
     fn set_task_exec<F>(&mut self, id : usize, f:F)->Result<(), ()>where F:Fn(&mut ExecutionInfo) {
         let mut thread = self.thread.lock();
         if let Some(th) = (*thread).get_mut(&id) {
-            let mut info = th.get_exec_info();
-            f(&mut info);
-            th.set_exec_info(&info);
+            f(&mut th.info);
             Ok(())
         }
         else {
@@ -149,9 +159,7 @@ impl TaskPoolBasicOp for TaskPool {
         let mut process = self.process.lock();
         let p = process.get_mut(&id);
         if let Some(p) = p {
-            let mut info = p.get_prog_info();
-            f(&mut info);
-            p.set_prog_info(info);
+            f(&mut p.info);
             Ok(())
         }
         else {
@@ -160,24 +168,47 @@ impl TaskPoolBasicOp for TaskPool {
     }
 
     fn remove_task(&mut self, id : usize)->Result<(), ()> {
-        self.thread.lock().remove(&id);
+        let mut thread = self.thread.lock();
+        let pid = thread.get(&id).unwrap().info.pid;
+        thread.remove(&id);
+        let list = self.waiting_list.lock();
+        if let Some(waiter) = list.get(&id) {
+            for id in waiter {
+                thread.get_mut(id).unwrap().wake();
+            }
+        }
+        let mut process = self.process.lock();
+        let p = process.get_mut(&pid).unwrap();
+        for (idx, tid) in p.tid.iter().enumerate() {
+            if *tid == id {
+                p.tid.remove(idx);
+                break;
+            }
+        }
         Ok(())
     }
 
     fn remove_program(&mut self, id : usize)->Result<(), ()> {
         let mut thread = self.thread.lock();
+        let pid = thread.get(&id).unwrap().info.pid;
         let mut v = vec![];
         for (tid, t) in (*thread).iter() {
-            if t.pid == id {
+            if t.info.pid == pid {
                 v.push(*tid);
             }
         }
+        let list = self.waiting_list.lock();
 
-        for idx in v {
-            (*thread).remove(&idx);
+        for tid in v {
+            (*thread).remove(&tid);
+            if let Some(waiter) = list.get(&tid) {
+                for id in waiter {
+                    thread.get_mut(id).unwrap().wake();
+                }
+            }
         }
         let mut process = self.process.lock();
-        (*process).remove(&id);
+        process.remove(&pid).unwrap();
         Ok(())
     }
 
@@ -187,9 +218,106 @@ impl TaskPoolBasicOp for TaskPool {
             println!("program #{}# {:?}, threads: ", p.info.pid, p.info.state);
             for tid in p.tid.iter() {
                 let info = self.get_task_exec(*tid).unwrap();
-                println!("#{}# {:?} ", info.tid, info.state);
+                println!("#{}# {:?} priority {}", info.tid, info.state, info.priority);
             }
         }
     }
 }
 
+impl TaskComplexOp for TaskPool {
+    fn alloc_heap(&mut self, size : usize, id : usize)->(usize, usize) {
+        let thread = self.thread.lock();
+        let pid = thread.get(&id).unwrap().info.pid;
+        let mut process = self.process.lock();
+        let p = process.get_mut(&pid).unwrap();
+        p.alloc_heap(size)
+    }
+
+    fn virt_to_phy(&self, id:usize, va:usize) ->usize {
+        let pid = self.thread.lock().get(&id).unwrap().info.pid;
+        self.process.lock().get(&pid).unwrap().virt_to_phy(va)
+    }
+
+    fn wait_task(&mut self, waiter: usize, target: usize) {
+        let mut thread = self.thread.lock();
+        let wait_thread = thread.get_mut(&waiter).unwrap();
+        wait_thread.sleep();
+        let wait_id = wait_thread.info.tid;
+        if let Some(target_th) = thread.get(&target) {
+            let mut list = self.waiting_list.lock();
+            if let Some(waiter) = list.get_mut(&target_th.info.tid) {
+                waiter.push(wait_id);
+            }
+            else {
+                let mut v = Vec::new();
+                v.push(wait_id);
+                list.insert(target_th.info.tid, v);
+            }
+        }
+        else {
+            let wait_thread = thread.get_mut(&waiter).unwrap();
+            wait_thread.wake();
+        }
+    }
+
+    fn check_timer(&mut self, time : usize) {
+        let mut thread = self.thread.lock();
+        let mut time_list = self.time_list.lock();
+        let mut wait_list = self.wait_time_list.lock();
+        let mut cnt = 0;
+        for tm in time_list.iter() {
+            if *tm <= time {
+                let id = wait_list.get(&tm).unwrap();
+                if let Some(th) = thread.get_mut(&id) {
+                    th.info.trigger_time = 0;
+                    th.info.state = TaskState::Waiting;
+                    cnt += 1;
+                }
+            }
+        }
+        for _ in 0..cnt {
+            let time = time_list.remove(0);
+            wait_list.remove(&time).unwrap();
+        }
+    }
+
+    fn set_timer(&mut self, id : usize, time : usize) {
+        let mut thread = self.thread.lock();
+        let th = thread.get_mut(&id).unwrap();
+        th.info.trigger_time = time;
+        th.info.state = TaskState::Sleeping;
+        let mut time_list = self.time_list.lock();
+        let mut wait_list = self.wait_time_list.lock();
+        wait_list.insert(time, th.info.tid);
+        time_list.push(time);
+        time_list.sort();
+    }
+
+    fn free_heap(&mut self, addr : usize, id : usize) {
+        let thread = self.thread.lock();
+        let pid = thread.get(&id).unwrap().info.pid;
+        let mut process = self.process.lock();
+        let p = process.get_mut(&pid).unwrap();
+        p.free_heap(addr);
+    }
+}
+
+impl TaskResourceOp for TaskPool {
+    fn push_file(&mut self, task_id : usize, file_id:usize) {
+        let pid = self.thread.lock().get(&task_id).unwrap().info.pid;
+        let mut process = self.process.lock();
+        process.get_mut(&pid).unwrap().push_file(file_id);
+    }
+
+    fn release_file(&mut self, task_id : usize, file_id:usize) {
+        let pid = self.thread.lock().get(&task_id).unwrap().info.pid;
+        let mut process = self.process.lock();
+        process.get_mut(&pid).unwrap().release_file(file_id);
+    }
+}
+
+impl TaskScheduleOp for TaskPool {
+    fn set_priority(&mut self, id:usize, priority : usize) {
+        self.thread.lock().get_mut(&id).unwrap().info.priority = priority;
+    }
+}

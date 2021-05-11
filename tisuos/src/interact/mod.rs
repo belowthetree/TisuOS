@@ -3,4 +3,3 @@
 
 pub mod console_input;
 pub mod console_shell;
-pub mod intershell;

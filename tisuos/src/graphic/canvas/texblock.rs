@@ -53,6 +53,19 @@ impl TexBlock {
             row += 1;
         }
     }
+
+    pub fn fill_image(&self, x:usize, y : usize, image:&Image) {
+        let data = image.data.as_slice();
+        for row in y..min(self.height, y + image.height) {
+            let st = row * self.width + x;
+            let len = min(image.width - x, self.width - x);
+            let board = self.board.array::<Pixel>(st, len);
+            let st = row * image.width + x;
+            let data = &data[st..(st + len)];
+            board.copy_from_slice(data);
+        }
+    }
+
     pub fn fill(&self, color : Pixel) {
         self.board.set(0, color, self.board.size);
     }
@@ -69,6 +82,8 @@ impl GridBlock for TexBlock {
 }
 
 use core::cmp::min;
+
+use fs_format::Image;
 
 use crate::{libs::font::{FONT_ASCII, FONT_HEIGHT, FONT_WIDTH}};
 use crate::{libs::graphic::Pixel, memory::block::Block};

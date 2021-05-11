@@ -80,10 +80,10 @@ pub fn handler(){
                 device::pending(pin as usize);
             }
             10 => {
-                console_input::run();
+                console_input::pending();
             }
             _ => {
-                println!("Unknown pin interrupt");
+                println!("Unknown pin interrupt {}", pin);
             }
         }
         complete(pin);

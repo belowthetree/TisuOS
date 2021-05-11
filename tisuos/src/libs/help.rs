@@ -1,4 +1,5 @@
-use crate::interrupt::trap::Environment;
+use crate::interrupt::environment::Environment;
+
 
 extern "C" {
     fn switch_user_process(env : *mut u8) -> usize;

@@ -12,6 +12,7 @@ type BlockDevice = tisu_driver::Block;
 type GraphicDevice = tisu_driver::GPU;
 type InputDevice = tisu_driver::InputDevice;
 
+/// ## 全局设备管理
 pub struct Device {
     pub block_device : Vec<Box<dyn BlockDriver>>,
     pub gpu_device : Vec<Box<dyn GraphicDriver>>,
@@ -19,6 +20,7 @@ pub struct Device {
     dtype : [(DeviceType, usize);9],
 }
 
+/// 中断通过 pending 通知对应设备，通过 handler 进行处理
 impl Device {
     pub fn new()->Self {
         let mut rt = Self {
@@ -69,16 +71,6 @@ impl Device {
         }
     }
 
-    // pub fn sync_read(&mut self,block_idx :usize,offset : usize,len : usize,buffer : &mut [u8]) {
-    //     let blk = self.block_device.get_mut(block_idx).unwrap();
-    //     blk.borrow_mut().sync_read(offset, len, buffer).unwrap();
-    // }
-
-    // pub fn sync_write(&mut self,block_idx :usize,offset : usize,len : usize,buffer : &[u8]) {
-    //     let blk = self.block_device.get_mut(block_idx).unwrap();
-    //     blk.borrow_mut().sync_write(offset, len, buffer).unwrap();
-    // }
-
     pub fn pending(&mut self, pin_idx : usize) {
         match self.dtype[pin_idx].0 {
             DeviceType::Block => {
@@ -93,10 +85,7 @@ impl Device {
                 let input = self.input_device.get_mut(self.dtype[pin_idx].1).unwrap();
                 let e = input.pending();
                 if let Ok(InterruptOk::Input(e)) = e {
-                    if let Ok(a) = Decoder::decode(
-                        e.etype as usize, e.code as usize, e.value as usize){
-                            print!("{:?}", a);
-                        }
+                    println!("{:?}", e);
                 }
             }
             _ => {}
@@ -115,11 +104,42 @@ impl Device {
             }
             DeviceType::Input => {
                 let input = self.input_device.get_mut(self.dtype[pin_idx].1).unwrap();
-                while let Ok(InterruptOk::Input(event)) = input.handler() {
-                    print!("{:?}", Decoder::decode(
-                        event.etype as usize, event.code as usize, event.value as usize));
+                while let Ok(InterruptOk::Input(e)) = input.handler() {
+                    if let Ok(a) = Decoder::decode(
+                        e.etype as usize, e.code as usize, e.value as usize){
+                        match a {
+                            virtio_input_decoder::DecodeType::Key(key, ktype) => {
+                                match ktype {
+                                    virtio_input_decoder::KeyType::Press => {
+                                        add_key_press(key as usize);
+                                        if let Ok(c) = key.to_char() {
+                                            push_input(c);
+                                        }
+                                    }
+                                    virtio_input_decoder::KeyType::Release => {
+                                        add_key_release(key as usize)
+                                    }
+                                }
+                            }
+                            virtio_input_decoder::DecodeType::Mouse(mouse) => {
+                                match mouse {
+                                    virtio_input_decoder::Mouse::ScrollUp => {
+                                        add_scroll(1)
+                                    }
+                                    virtio_input_decoder::Mouse::ScrollDown => {
+                                        add_scroll(2)
+                                    }
+                                    virtio_input_decoder::Mouse::X(x) => {
+                                        add_mouse_x(x);
+                                    }
+                                    virtio_input_decoder::Mouse::Y(y) => {
+                                        add_mouse_y(y);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-                println!();
             }
             _ => {}
         }
@@ -202,8 +222,8 @@ pub fn invalid(){
 use core::ptr::slice_from_raw_parts;
 
 use alloc::prelude::v1::*;
-use crate::memory::get_manager;
-use super::{config::{HEIGHT, WIDTH}};
+use crate::{filesystem::push_input, memory::get_manager};
+use super::{config::{HEIGHT, WIDTH}, input_buffer::{add_key_press, add_key_release, add_mouse_x, add_mouse_y, add_scroll}};
 use virtio_input_decoder::Decoder;
 use tisu_driver::{BlockDriver, DeviceType, Driver, GraphicDriver, Pixel, Rect, VirtHeader};
 use tisu_driver::InterruptOk;

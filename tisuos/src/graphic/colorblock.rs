@@ -20,10 +20,10 @@ impl ColorBlock {
     /// ### 以纯色初始化
     pub fn solid_color(x : usize, y : usize, width : usize, height : usize, color : Pixel)->ColorBlock {
         let rt = Self {
-            x : x,
-            y : y,
-            width : width,
-            height : height,
+            x,
+            y,
+            width,
+            height,
             buffer : Block::<Pixel>::new(width * height),
         };
         rt.fill_color(color);
@@ -154,11 +154,11 @@ use crate::{
         font::{
             FONT_ASCII, FONT_HEIGHT, FONT_WIDTH
         },
-        graphic::Pixel, shape::Vector
+        shape::Vector
     },
     memory::block::Block,
     virtio::device::{draw_rect_blend, draw_rect_override}
 };
 
-use tisu_driver::Rect;
+use tisu_driver::{Pixel, Rect};
 use fs_format::Image;

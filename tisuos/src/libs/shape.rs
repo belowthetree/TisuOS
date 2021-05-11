@@ -23,7 +23,6 @@ impl Vector {
             y : (point.y * HEIGHT as f32) as isize,
         }
     }
-
 }
 
 
@@ -100,6 +99,13 @@ impl ScalePoint {
         Self{
             x : 0.0,
             y : 0.0,
+        }
+    }
+
+    pub fn convert(x:usize, y:usize)->Self {
+        Self{
+            x : x as f32 / 32768.0,
+            y : y as f32 / 32768.0,
         }
     }
 }
