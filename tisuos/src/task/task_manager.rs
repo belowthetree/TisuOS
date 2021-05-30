@@ -5,7 +5,7 @@
 //! 2021年3月23日 zg
 
 
-use crate::{filesystem::{pop_task_out, push_task_in, push_task_out}, interrupt::{timer, environment::Environment}, libs::help::{switch_kernel, switch_user}, memory::ProgramArea};
+use crate::{filesystem::{pop_task_out, push_task_in, push_task_out}, interrupt::{timer, environment::Environment}, libs::help::{switch_kernel_process, switch_user_process}, memory::ProgramArea};
 use tisu_sync::SpinMutex;
 use super::{require::{TaskPoolBasicOp, TaskPoolOp}, task_info::{ExecutionInfo, ProgramInfo, TaskState}};
 
@@ -43,8 +43,8 @@ impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
             info.state = TaskState::Running;
             info.env.hartid = hartid;
         }).unwrap();
-        let info = self.task_pool.get_task_exec(id).unwrap();
-        self.switch_to(&info);
+        let mut info = self.task_pool.get_task_exec(id).unwrap();
+        self.switch_to(&mut info);
     }
 
     /// 调度器的调用及进程切换属于临界区，防止多核竞争错误
@@ -58,26 +58,28 @@ impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
                 info.env = env.clone();
             }).unwrap();
         }
+        self.mutex.lock();
         if env.hartid == 0 {
             self.check_timer();
         }
-        self.mutex.lock();
         let next = self.scheduler.schedule(&mut self.task_pool);
         if let Some(next) = next {
-            self.task_pool.set_task_exec(next, |info|{
+            if self.task_pool.set_task_exec(next, |info|{
                 info.state = TaskState::Running;
                 info.env.hartid = env.hartid;
-            }).unwrap();
-            let info = self.task_pool.get_task_exec(next).unwrap();
-            self.mutex.unlock();
-            self.switch_to(&info);
+            }).is_ok() {
+                if let Some(mut info) = self.task_pool.get_task_exec(next) {
+                    self.mutex.unlock();
+                    self.switch_to(&mut info);
+                }
+            }
         }
         self.mutex.unlock();
     }
 
     /// 本质是创建进程，返还主线程 ID
-    pub fn create_task(&mut self, program : ProgramArea)->Option<usize>{
-        self.task_pool.create(program)
+    pub fn create_task(&mut self, program : ProgramArea, env : &Environment)->Option<usize>{
+        self.task_pool.create(program, env)
     }
 
     pub fn wake_task(&mut self, id : usize) {
@@ -123,6 +125,10 @@ impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
         }
     }
 
+    pub fn expand_stack(&mut self, id : usize)->Result<(), ()> {
+        self.task_pool.expand_stack(id)
+    }
+
     pub fn program_exit(&mut self, hartid : usize) {
         let id = self.task_pool.find(|info|{
             info.state == TaskState::Running && info.env.hartid == hartid
@@ -130,7 +136,6 @@ impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
         let info = self.task_pool.get_task_exec(id).unwrap();
         if info.is_main {
             self.task_pool.remove_program(id).unwrap();
-            // println!("remove pid {}", info.pid);
         }
         else {
             self.task_pool.remove_task(id).unwrap();
@@ -141,18 +146,36 @@ impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
         self.task_pool.get_task_exec(id)
     }
 
+    pub fn get_program_info(&mut self, pid : usize)->Option<ProgramInfo> {
+        if let Some(tid) = self.task_pool.find(|info| {
+            info.pid == pid
+        }) {
+            self.task_pool.get_task_prog(tid)
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn find(&mut self, f : impl Fn(&ExecutionInfo)->bool)->Option<usize> {
+        self.task_pool.find(f)
+    }
+
     /// 调试用函数，待删除
     pub fn print(&self) {
         self.task_pool.print()
     }
 
-    fn switch_to(&self, info : &ExecutionInfo) {
-        let mut env = info.env;
+    fn switch_to(&self, info : &mut ExecutionInfo) {
         if info.is_kernel {
-            switch_kernel(&mut env);
+            unsafe {
+                switch_kernel_process(&mut info.env as *mut Environment as *mut u8);
+            }
         }
         else {
-            switch_user(&mut env);
+            unsafe {
+                switch_user_process(&mut info.env as *mut Environment as *mut u8);
+            }
         }
     }
 }
@@ -200,6 +223,23 @@ impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
         self.task_pool.virt_to_phy(id, va)
     }
 
+    pub fn sleep_task(&mut self, id : usize, env: &Environment)->Result<(), ()> {
+        self.task_pool.set_task_exec(id, |info| {
+            info.state = TaskState::Sleeping;
+            info.env = env.clone();
+            info.env.epc += 4;
+        })
+    }
+
+    pub fn join(&mut self, id : usize, env: &Environment) {
+        self.task_pool.join(id);
+        self.task_pool.set_task_exec(id, |info| {
+            info.env = env.clone();
+            info.env.epc += 4;
+        }).unwrap();
+    }
+
+    /// 检查是否有任务到了该唤醒的时间
     fn check_timer(&mut self) {
         let time = timer::get_micro_time();
         self.task_pool.check_timer(time);

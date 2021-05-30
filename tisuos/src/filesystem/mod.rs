@@ -21,6 +21,7 @@ pub static mut SYSTEM : Option<Vec<FileSystem>> = None;
 pub static mut FORMAT : Option<Vec<BlockType>> = None;
 static mut ID_MANAGER : Option<IdManager> = None;
 
+/// 在此处获取所有磁盘信息并建立对应的文件系统
 pub fn init(){
     stdio::init();
     unsafe {

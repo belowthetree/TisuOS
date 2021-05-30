@@ -114,7 +114,6 @@ impl Dock {
                 match event.info {
                     super::mouse::MouseEventInfo::Point(point) => {
                         if let Some(ftype) = self.trigger(point) {
-                            println!("trigger {:?}", ftype);
                             match ftype {
                                 DockFuncType::OpenFileWindow => { return PlaneEvent::CreateFileWindow; }
                                 DockFuncType::OpenTerminal => { return PlaneEvent::None; }

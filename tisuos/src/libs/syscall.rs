@@ -35,6 +35,8 @@ const GET_MOUSE_POS     : usize = 21;
 const DIRECTORY_INFO    : usize = 22;
 const CLOSE             : usize = 23;
 const KILL              : usize = 24;
+const SHUTDOWN          : usize = 27;
+const SLEEP             : usize = 28;
 
 fn syscall(num : usize, arg1 : usize, arg2 : usize, arg3 : usize, arg4 : usize)->usize {
     unsafe {
@@ -46,6 +48,14 @@ fn syscall_long(num : usize, a1 : usize, a2 : usize, a3 : usize, a4 : usize, a5:
     unsafe {
         make_syscall_long(num, a1, a2, a3, a4, a5)
     }
+}
+
+pub fn sleep() {
+    syscall(SLEEP, 0, 0, 0, 0);
+}
+
+pub fn shutdown() {
+    syscall(SHUTDOWN, 0, 0, 0, 0);
 }
 
 pub fn kill(id : usize) {

@@ -104,11 +104,11 @@ impl<T1:Copy> Block<T1> {
 
 impl<T> Drop for Block<T>{
     fn drop(&mut self) {
-        free(self.addr as *mut u8);
+        get_manager().free_memory(self.addr as *mut u8);
     }
 }
 
 use core::{cmp::min, mem::size_of, ptr::slice_from_raw_parts};
 use tisu_memory::MemoryOp;
 
-use super::{free, get_manager};
+use super::get_manager;

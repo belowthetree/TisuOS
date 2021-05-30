@@ -24,13 +24,12 @@ pub fn get_id_mgr()->&'static mut IdManager {
 type IoResult = Result<usize, IoError>;
 
 /// 读写接口为系统调用服务
-pub fn read(task_id:usize, file_id : usize, data : &mut [u8])->IoResult {
+pub fn read(program_id:usize, file_id : usize, data : &mut [u8])->IoResult {
     if file_id <= 1 {
         let mut len = 0;
         if file_id == 0 {
             for i in 0..data.len() {
-                if let Some(c) = pop_task_in(task_id) {
-                    println!("pop {}", c);
+                if let Some(c) = pop_task_in(program_id) {
                     data[i] = c as u8;
                 }
                 else {
@@ -41,14 +40,14 @@ pub fn read(task_id:usize, file_id : usize, data : &mut [u8])->IoResult {
         }
         else {
             let mgr = get_task_mgr().unwrap();
-            len = mgr.get_stdout(task_id, data);
+            len = mgr.get_stdout(program_id, data);
         }
         Ok(len)
     }
     else {
         if let Some(sys) = search_system(file_id) {
             let file = sys.file(file_id).unwrap();
-            if !file.is_own(task_id) {
+            if !file.is_own(program_id) {
                 return Err(IoError::NotOpen);
             }
             if let Ok(len) = sys.read(file_id, data) {
@@ -64,17 +63,17 @@ pub fn read(task_id:usize, file_id : usize, data : &mut [u8])->IoResult {
     }
 }
 
-pub fn write(task_id:usize, file_id : usize, data : &[u8])->IoResult {
+pub fn write(program_id:usize, file_id : usize, data : &[u8])->IoResult {
     if file_id <= 1 {
         // println!("write {} len {}", id, data.len());
         if file_id == 0 {
             for i in 0..data.len() {
-                push_task_in(task_id, data[i] as char);
+                push_task_in(program_id, data[i] as char);
             }
         }
         else {
             let mgr = get_task_mgr().unwrap();
-            mgr.stdout(task_id, data);
+            mgr.stdout(program_id, data);
             for c in data {
                 push_output(*c as char);
             }
@@ -84,7 +83,7 @@ pub fn write(task_id:usize, file_id : usize, data : &[u8])->IoResult {
     else {
         if let Some(sys) = search_system(file_id) {
             let file = sys.file(file_id).unwrap();
-            if !file.is_own(task_id) {
+            if !file.is_own(program_id) {
                 return Err(IoError::NotOpen);
             }
             if let Ok(len) = sys.write(file_id, data) {

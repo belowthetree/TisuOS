@@ -16,7 +16,7 @@ copy:binary
 	@$(foreach file, $(ELF), mv $(file) $(patsubst $(TARGET_DIR)/%, $(APP_DIR)/%.elf, $(file));)
 
 img: FORCE
-#	cargo install image-maker
+#	cargo install image-maker v0.1.2
 	image-maker $(APP_DIR) $(IMAGE)
 	cp $(IMAGE) ../tisuos/
 

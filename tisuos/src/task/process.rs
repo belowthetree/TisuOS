@@ -6,29 +6,11 @@
 use alloc::{prelude::v1::*};
 
 pub static mut PID_CNT : AtomCounter = AtomCounter::new();
-pub static STACK_PAGE_NUM : usize = 16;
-#[allow(dead_code)]
-pub static HEAP_SIZE : usize = 4096;
+pub const MAX_HEAP_SIZE : usize = PAGE_SIZE * 1024 * 4;
 
-/// ## ProcessState
-/// 进程目前分为三种状态：Waiting、Sleeping、Running
-/// 每个核心只有一个 Running 的进程，只有 Waiting 的进程能够被调度
-/// Sleeping 的进程除非被唤醒，否则永远沉睡
-#[allow(dead_code)]
-#[derive(Copy, Clone, Debug)]
-pub enum ProcessState{
-    Scheduling = 1,
-    Sleeping = 3,
-}
-
-impl PartialEq for ProcessState{
-    fn eq(&self, other: &Self) -> bool {
-        (*self as usize) == (*other as usize)
-    }
-}
 
 /// ## 进程信息结构体
-/// 保存环境、程序区域、堆区域（预计增加优先级）
+/// 保存环境、程序区域、堆区域
 /// heap、program 以虚拟地址进行交互，负责进程的映射工作
 pub struct Process{
     pub info : ProgramInfo,
@@ -36,6 +18,7 @@ pub struct Process{
     heap : TaskHeap,
     program : ProgramArea,
     resource : Resource,
+    pub join_num : usize,
     pub is_kernel : bool,
 }
 
@@ -57,6 +40,7 @@ impl Process {
             heap : TaskHeap::new(unsafe {MEMORY_END}, program.is_kernel),
             program,
             resource:Resource::new(pid),
+            join_num : 0,
             tid : Vec::<usize>::new(),
         };
         Some(rt)
@@ -79,9 +63,26 @@ impl Process {
         self.heap.free(addr);
     }
 
+    pub fn contain(&self, va:usize)->bool {
+        if va >= unsafe {MEMORY_END} && va <= MAX_HEAP_SIZE + unsafe {MEMORY_END} {
+            true
+        }
+        else if self.program.contain(va) {
+            true
+        }
+        else {
+            false
+        }
+    }
+
     pub fn virt_to_phy(&self, va:usize)->usize {
         if va >= unsafe {MEMORY_END} {
-            self.heap.virt_to_phy(va)
+            if va <= MAX_HEAP_SIZE + unsafe {MEMORY_END} {
+                self.heap.virt_to_phy(va)
+            }
+            else {
+                panic!("virt to phy va {:x}", va);
+            }
         }
         else if self.program.contain(va) {
             self.program.virt_to_phy(va)
@@ -91,6 +92,7 @@ impl Process {
         }
     }
 
+    /// 添加文件 ID
     pub fn push_file(&mut self, id:usize) {
         self.resource.push_file(id);
     }
@@ -117,7 +119,9 @@ pub fn start_init_process(){
     program.push_area(Area::kernel_data());
     program.push_area(Area::virtio_area());
     program.push_area(Area::timer_area());
-    let id = mgr.create_task(program).unwrap();
+    program.push_area(Area::rtc_area());
+    program.push_area(Area::test_area());
+    let id = mgr.create_task(program, &Environment::new()).unwrap();
     mgr.start(id, 0);
     panic!("start init process fail {}", 0);
 }
@@ -133,7 +137,7 @@ pub fn init_process(){
 
     branch(output_handler as usize, 0, 0);
 
-    if gpu_support() && fork() != 0 {
+    if gpu_support() && fork() == 0 {
         println!("support gpu, start desktop!");
         let mut desk = Plane::new();
         desk.run();
@@ -151,7 +155,7 @@ pub fn init_process(){
 
 
 extern crate alloc;
-use crate::{desktop::plane::Plane, filesystem, interact::{console_input::output_handler, console_shell}, interrupt::timer, libs::syscall::{branch, fork}, memory::{Area, ProgramArea, config::MEMORY_END, heap_memory::TaskHeap, map::SATP}, virtio::device::gpu_support};
+use crate::{desktop::plane::Plane, filesystem, interact::{console_input::output_handler, console_shell}, interrupt::{environment::Environment, timer}, libs::syscall::{branch, fork}, memory::{Area, ProgramArea, config::{MEMORY_END, PAGE_SIZE}, heap_memory::TaskHeap, map::SATP}, virtio::device::gpu_support};
 
 use super::{resource::Resource, task_info::{ProgramInfo, TaskState}};
 use tisu_sync::AtomCounter;

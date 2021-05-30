@@ -27,6 +27,11 @@ const CLOSE             : usize = 23;
 const KILL              : usize = 24;
 const CLOSE_TIMER       : usize = 25;
 const OPEN_TIMER        : usize = 26;
+const SHUTDOWN          : usize = 27;
+const SLEEP             : usize = 28;
+const WAKE              : usize = 29;
+const JOIN              : usize = 30;
+const GET_TID           : usize = 31;
 
 static mut CLOSE_CNT : [usize;4] = [0;4];
 
@@ -41,6 +46,31 @@ pub fn handler(env : &mut Environment) -> usize {
             println!("syscall test2");
         }
         3 => {
+        }
+        GET_TID => {
+            let mgr = get_task_mgr().unwrap();
+            let (exec, _) = mgr.get_current_task(env.hartid).unwrap();
+            rt = exec.tid;
+        }
+        JOIN => {
+            let mgr = get_task_mgr().unwrap();
+            let (exec, _) = mgr.get_current_task(env.hartid).unwrap();
+            mgr.join(exec.tid, env);
+        }
+        WAKE => {
+            let mgr = get_task_mgr().unwrap();
+            mgr.wake_task(env.a1());
+        }
+        SLEEP => {
+            let mgr = get_task_mgr().unwrap();
+            let (exec, _) = mgr.get_current_task(env.hartid).unwrap();
+            mgr.sleep_task(exec.tid, env).unwrap();
+        }
+        SHUTDOWN => {
+            unsafe {
+                const VIRT_TEST: *mut u32 = 0x10_0000 as *mut u32;
+                VIRT_TEST.write_volatile(0x5555);
+            }
         }
         OPEN_TIMER => {
             // println!("open");
@@ -105,7 +135,7 @@ pub fn handler(env : &mut Environment) -> usize {
                 let addr = env.regs[Register::A2.val()];
                 let ptr = mgr.virt_to_phy(exec.tid, addr) as *const u8;
                 let data = unsafe{& *(slice_from_raw_parts(ptr, len))};
-                if let Ok(len) = write(exec.tid, id, data) {
+                if let Ok(len) = write(exec.pid, id, data) {
                     rt = len;
                 }
                 else {
@@ -122,7 +152,7 @@ pub fn handler(env : &mut Environment) -> usize {
                 let addr = env.regs[Register::A2.val()];
                 let ptr = mgr.virt_to_phy(exec.tid, addr) as *mut u8;
                 let data = unsafe{&mut *(slice_from_raw_parts_mut(ptr, len))};
-                if let Ok(len) = read(exec.tid, id, data) {
+                if let Ok(len) = read(exec.pid, id, data) {
                     rt = len;
                 }
                 else {
@@ -148,17 +178,15 @@ pub fn handler(env : &mut Environment) -> usize {
         MALLOC => {
             let mgr = get_task_mgr().unwrap();
             let (exec, _) = mgr.get_current_task(env.hartid).unwrap();
-            rt = mgr.alloc_heap(env.regs[Register::A1.val()], exec.tid).0;
+            let t = mgr.alloc_heap(env.regs[Register::A1.val()], exec.tid);
+            rt = t.0;
         }
         SET_TIMER => {
             let time = env.regs[Register::A1.val()];
             get_task_mgr().unwrap().sleep_timer(env, time);
         }
         EXEC => {
-            let ptr = env.regs[Register::A1.val()] as *mut char;
-            let len = env.regs[Register::A2.val()];
-            let path = unsafe {&*(slice_from_raw_parts(ptr, len))};
-            rt = exec(char_to_str(path), env.regs[Register::A3.val()] != 0);
+            rt = exec(env);
         }
         PRINT_TASK => {
             get_task_mgr().unwrap().print();
@@ -218,7 +246,7 @@ fn directory_info(env : &Environment)->usize {
     let (id, path) = all_path.split_at(idx);
     let id = convert_to_usize(&id.to_string());
     if let Some(sys) = get_system(id) {
-        let flag = mgr.virt_to_phy(exec.tid, env.a2());
+        let flag = env.a2();
         if let Ok(dir) = sys.enter(path.to_string().clone()) {
             let mut dir_num = 0;
             let mut file_num = 0;
@@ -291,7 +319,7 @@ fn file_info(env : &Environment)->usize {
     let (id, path) = all_path.split_at(idx);
     let id = convert_to_usize(&id.to_string());
     if let Some(sys) = get_system(id) {
-        let flag = mgr.virt_to_phy(exec.tid, env.a2());
+        let flag = env.a2();
         if let Ok(file) = sys.get_file(path.to_string().clone()) {
             let file_info = FileInfo::new(
                 file.id,
@@ -326,7 +354,7 @@ fn open(env : &Environment)->isize {
     let (id, path) = all_path.split_at(idx);
     let id = convert_to_usize(&id.to_string());
     if let Some(sys) = get_system(id) {
-        let flag = mgr.virt_to_phy(exec.tid, env.a2());
+        let flag = env.a2();
         if let Ok(file) = sys.open(path.to_string().clone(), FileFlag::from(flag).unwrap()) {
             file.own(exec.pid);
             mgr.push_file(exec.tid, file.id);
@@ -352,7 +380,12 @@ fn branch(env : &Environment)->usize {
     mgr.branch(env).unwrap()
 }
 
-fn exec(path : String, is_kernel: bool)->usize {
+fn exec(env : &Environment)->usize {
+    let ptr = env.regs[Register::A1.val()] as *mut char;
+    let len = env.regs[Register::A2.val()];
+    let path = unsafe {&*(slice_from_raw_parts(ptr, len))};
+    let path = char_to_str(path);
+    let is_kernel = env.regs[Register::A3.val()] != 0;
     let idx = path.find("/").unwrap();
     let (id, p) = path.split_at(idx);
     let id = convert_to_usize(&id.to_string());
@@ -368,7 +401,7 @@ fn exec(path : String, is_kernel: bool)->usize {
     let mgr = get_task_mgr().unwrap();
     let mut program = ProgramArea::new(elf.entry(), is_kernel);
     program.push_elf(&mut elf);
-    let task_id = mgr.create_task(program).unwrap();
+    let task_id = mgr.create_task(program, env).unwrap();
     mgr.wake_task(task_id);
     task_id
 }

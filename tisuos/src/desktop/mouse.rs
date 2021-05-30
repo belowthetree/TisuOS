@@ -9,6 +9,7 @@ const DOUBLE_INTERVAL : usize = 400; // 双击判定间隔，单位毫秒
 pub struct Mouse{
     pub pre_pos : ScalePoint,
     pub cur_pos : ScalePoint,
+    pub press_pos : ScalePoint,
     pub left : bool,
     pub right : bool,
     pub scroll : isize,
@@ -59,6 +60,7 @@ impl Mouse {
         Self{
             pre_pos : ScalePoint::new(),
             cur_pos : ScalePoint::new(),
+            press_pos : ScalePoint::new(),
             left : false,
             right : false,
             scroll : 0,
@@ -73,6 +75,7 @@ impl Mouse {
     pub fn get_key_down(&mut self, input : Key){
         match input {
             Key::MouseLeft => {
+                self.press_pos = get_mouse_position();
                 self.left = true;
                 self.add_event(MouseEvent::new(MouseEventType::Drag, MouseEventInfo::Key(input)));
             }
@@ -86,19 +89,18 @@ impl Mouse {
         match input {
             Key::MouseLeft => {
                 let time = get_million_time();
-                let mut double_click = false;
-                if self.left_click {
-                    if time - self.left_click_time <= DOUBLE_INTERVAL {
-                        double_click = true;
+                if self.press_pos == get_mouse_position() {
+                    if self.left_click && time - self.left_click_time <= DOUBLE_INTERVAL {
                         self.add_event(MouseEvent::new(MouseEventType::LeftDoubleClick,
                             MouseEventInfo::Point(self.get_current_position())));
+                        self.left_click = false;
+                    }
+                    else {
+                        self.add_event(MouseEvent::new(MouseEventType::LeftClick,
+                            MouseEventInfo::Point(self.get_current_position())));
+                        self.left_click = true;
                     }
                 }
-                if !double_click{
-                    self.add_event(MouseEvent::new(MouseEventType::LeftClick,
-                        MouseEventInfo::Point(self.get_current_position())));
-                }
-                self.left_click = true;
                 self.left = false;
                 self.left_click_time = time;
             }

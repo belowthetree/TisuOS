@@ -19,12 +19,12 @@ pub struct Window {
     pub headbar : Headbar,
     pub content : Content,
     pub hidden : bool,
-    pub task_id : Option<usize>,
+    pub program_id : Option<usize>,
 }
 
 impl Window {
     pub fn new(x : usize, y : usize, width : usize, height : usize, ctype : ContentType,
-            task_id:Option<usize>)->Self {
+            program_id:Option<usize>)->Self {
         let id = unsafe {
             WINDOW_ID
         };
@@ -35,9 +35,9 @@ impl Window {
             area : Area::new(x, y, width, height),
             id,
             headbar : Headbar::new(x, y, width),
-            content : Content::new(x, y + HEADBAR_HEIGHT, width, height - HEADBAR_HEIGHT, ctype, task_id),
+            content : Content::new(x, y + HEADBAR_HEIGHT, width, height - HEADBAR_HEIGHT, ctype, program_id),
             hidden : false,
-            task_id,
+            program_id,
         };
         rt
     }
@@ -46,6 +46,10 @@ impl Window {
         let mut v = PlaneEvent::None;
         match event.etype {
             MouseEventType::LeftClick => {
+                match self.content.do_mouse_event(event) {
+                    super::content::ContentEvent::Invalid => {v = PlaneEvent::WindowInvalid}
+                    _ => {}
+                }
                 let e = self.headbar.do_mouse_event(event);
                 match e {
                     WindowEvent::TriggerHidden => {
@@ -115,15 +119,15 @@ impl Window {
     }
 
     pub fn run(&mut self)->PlaneEvent {
-        if let Some(id) = self.task_id {
+        if let Some(id) = self.program_id {
             let mut e = match self.content.run() {
                 super::content::ContentEvent::Invalid => {PlaneEvent::WindowInvalid}
                 _ => {PlaneEvent::None}
             };
             let mgr = get_task_mgr().unwrap();
-            if mgr.get_task_exec(id).is_none() {
+            if mgr.get_program_info(id).is_none() {
                 e = PlaneEvent::WindowClose(self.id);
-                self.task_id = None;
+                self.program_id = None;
             }
             e
         }
@@ -167,7 +171,10 @@ impl Window {
 
 impl Drop for Window {
     fn drop(&mut self) {
-        if let Some(id) = self.task_id {
+        if let Some(id) = self.program_id {
+            let id = get_task_mgr().unwrap().find(|info|{
+                info.pid == id && info.is_main
+            }).unwrap();
             kill(id);
         }
     }

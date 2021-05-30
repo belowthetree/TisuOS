@@ -25,11 +25,36 @@ const GET_KEY_RELEASE   : usize = 19;
 const GET_MOUSE_SCROLL  : usize = 20;
 const GET_MOUSE_POS     : usize = 21;
 const DIRECTORY_INFO    : usize = 22;
+const SHUTDOWN          : usize = 27;
+const SLEEP             : usize = 28;
+const WAKE              : usize = 29;
+const JOIN              : usize = 30;
+const GET_TID           : usize = 31;
 
 extern  "C" {
     fn env_call_tuple(num:usize, a0 : usize, a1: usize, a2: usize)->(usize, usize);
     fn env_call(num:usize, a0 : usize, a1: usize, a2: usize)->usize;
     fn env_call_long(num:usize, a0:usize, a1:usize, a2:usize, a3:usize, a4:usize,a5:usize)->usize;
+}
+
+pub fn get_tid()->usize {
+    syscall(GET_TID, 0, 0, 0)
+}
+
+pub fn join() {
+    syscall(JOIN, 0, 0, 0);
+}
+
+pub fn wake(tid : usize) {
+    syscall(WAKE, tid, 0, 0);
+}
+
+pub fn sleep() {
+    syscall(SLEEP, 0, 0, 0);
+}
+
+pub fn exit() {
+    syscall(SHUTDOWN, 0, 0, 0);
 }
 
 pub fn directory_info(path : String)->usize {

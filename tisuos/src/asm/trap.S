@@ -64,7 +64,7 @@ m_trap_vector:
 	mv		a4, sp
 	csrr	a5, mtval
 	la		sp, _trap_stack_end
-	li		t1, 0x20000
+	li		t1, 0x40000
 	mul		t1, t1, a2
 	sub		sp, sp, t1
 	li		t0, 2
@@ -74,6 +74,7 @@ m_trap_vector:
 	# and return.
 	# m_trap will return the return address via a0.
 
+	sfence.vma
 	li		t0, 2
 	csrs	sscratch, t0
 	csrw	mepc, a0
@@ -113,6 +114,7 @@ make_syscall_long:
 # a0: *mut Environment
 .global switch_user_process
 switch_user_process:
+	sfence.vma
 	li		t0, 2
 	csrs	sscratch, t0
 	mv		t6, a0
@@ -145,6 +147,7 @@ switch_user_process:
 
 .global switch_kernel_process
 switch_kernel_process:
+	sfence.vma
 	li		t0, 2
 	csrs	sscratch, t0
 	mv		t6, a0

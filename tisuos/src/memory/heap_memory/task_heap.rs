@@ -6,7 +6,7 @@
 
 use alloc::prelude::v1::*;
 
-use crate::memory::map::SATP;
+use crate::{memory::map::SATP, task::process::MAX_HEAP_SIZE};
 
 use super::heap_pool::HeapPool;
 
@@ -69,13 +69,12 @@ impl TaskHeap {
         let pool = HeapPool::new(
             self.virtual_heap_top, size, self.is_kernel);
         pool.map(satp);
-        // println!("heap expand size {} from {:x} to {:x}",
-        //     size, self.virtual_heap_top, self.virtual_heap_top + pool.total_size);
         self.virtual_heap_top += pool.total_size;
         self.memory_area.push(pool);
         self.memory_area.sort_by(|a, b| {
             a.block_size.cmp(&b.block_size)
-        })
+        });
+        assert!(self.virtual_heap_top - self.virtual_heap_start <= MAX_HEAP_SIZE);
     }
 }
 

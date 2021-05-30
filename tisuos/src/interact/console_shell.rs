@@ -3,6 +3,9 @@
 //! 
 //! 2021年1月25日 zg
 
+// const TEST_FAIL         : u32 = 0x3333;
+const TEST_PASS         : u32 = 0x5555;
+// const TEST_RESET        : u32 = 0x7777;
 
 /// ## 维护一个循环队列
 pub struct ConsoleShell {
@@ -108,6 +111,15 @@ impl ConsoleShell {
         }
         else if s.len() == 1 {
             match s[0] {
+                "shutdown" => {
+                    unsafe {
+                        const VIRT_TEST: *mut u32 = 0x10_0000 as *mut u32;
+                        VIRT_TEST.write_volatile(TEST_PASS);
+                    }
+                }
+                "time" => {
+                    println!("\n{:?}", crate::rtc::Time::read());
+                }
                 "readdir" => {
                     let ptr = directory_info("0/".to_string());
                     let info = unsafe {&mut *(ptr as *mut filesystem::DirectoryInfo)};
@@ -145,15 +157,19 @@ impl ConsoleShell {
                 "ls" => {
                     if let Some(tree) = &self.directory{
                         output_str(&"directory: ".to_string());
+                        // println!("dir: ");
                         for item in tree.item.iter() {
                             if item.itype == DirItemType::Directory {
                                 output_str(&(item.name.clone() + " "));
+                                // print!("{} ", item.name.clone());
                             }
                         }
                         output_str(&"\nfile: ".to_string());
+                        // println!("file: ");
                         for item in tree.item.iter() {
                             if item.itype == DirItemType::File {
                                 output_str(&(item.name.clone() + " "));
+                                // print!("{} ", item.name.clone());
                             }
                         }
                         output('\n' as u8);

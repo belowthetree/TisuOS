@@ -2,7 +2,7 @@
 //! 内存分为物理内存、虚拟内存管理
 //! 目前内存分配以页面为基础，然后形成内存池
 //! 程序的内存申请交由堆内存进行管理
-//! 
+//!
 //! 2021年1月25日 zg
 
 use self::{
@@ -19,6 +19,7 @@ mod program_memory;
 mod stack_memory;
 
 pub use program_memory::*;
+pub use stack_memory::*;
 
 type MemoryManager = tisu_memory::MemoryManager<PageManager, Heap<PageManager>>;
 
@@ -37,7 +38,7 @@ pub fn init(){
 }
 
 #[inline]
-pub fn get_manager()->&'static mut MemoryManager {
+pub fn get_manager()->&'static mut impl MemoryOp {
 	unsafe {
 		let mut rt = None;
 		if let Some(mgr) = &mut MANAGER {
@@ -66,15 +67,6 @@ pub fn print() {
 		if let Some(mgr) = &mut MANAGER {
 			mgr.print();
 		}
-	}
-}
-
-pub fn free(addr : *mut u8) {
-	unsafe {
-		if let Some(mgr) = &mut MANAGER {
-			mgr.free_memory(addr);
-		}
-		else{panic!("Error {}", 0)}
 	}
 }
 

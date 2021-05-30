@@ -34,9 +34,9 @@ impl TaskPoolOp for TaskPool{}
 
 /// 为了防止死锁，线程必须先于进程上锁
 impl TaskPoolBasicOp for TaskPool {
-    fn create(&mut self, program : ProgramArea)->Option<usize> {
+    fn create(&mut self, program : ProgramArea, env : &Environment)->Option<usize> {
         let mut p = Process::new(program).unwrap();
-        let t = Thread::new(&p).unwrap();
+        let t = Thread::new(&p, env).unwrap();
         let tid = t.info.tid;
         p.tid.push(t.info.tid);
         self.thread.lock().insert(t.info.tid, t);
@@ -233,9 +233,26 @@ impl TaskComplexOp for TaskPool {
         p.alloc_heap(size)
     }
 
-    fn virt_to_phy(&self, id:usize, va:usize) ->usize {
-        let pid = self.thread.lock().get(&id).unwrap().info.pid;
-        self.process.lock().get(&pid).unwrap().virt_to_phy(va)
+    fn free_heap(&mut self, addr : usize, id : usize) {
+        let thread = self.thread.lock();
+        let pid = thread.get(&id).unwrap().info.pid;
+        let mut process = self.process.lock();
+        let p = process.get_mut(&pid).unwrap();
+        p.free_heap(addr);
+    }
+
+    fn virt_to_phy(&self, id:usize, va:usize)->usize {
+        let thread = self.thread.lock();
+        let t = thread.get(&id).unwrap();
+        let pid = t.info.pid;
+        let process = self.process.lock();
+        let p = process.get(&pid).unwrap();
+        if p.contain(va) {
+            p.virt_to_phy(va)
+        }
+        else {
+            t.virt_to_phy(va)
+        }
     }
 
     fn wait_task(&mut self, waiter: usize, target: usize) {
@@ -293,12 +310,29 @@ impl TaskComplexOp for TaskPool {
         time_list.sort();
     }
 
-    fn free_heap(&mut self, addr : usize, id : usize) {
-        let thread = self.thread.lock();
-        let pid = thread.get(&id).unwrap().info.pid;
+    fn expand_stack(&mut self, id : usize)->Result<(),()> {
+        let mut thread = self.thread.lock();
+        let th = thread.get_mut(&id).unwrap();
+        let process = self.process.lock();
+        let p = process.get(&th.info.pid).unwrap();
+        th.expand_stack(&p.info.satp)
+    }
+
+    fn join(&mut self, id : usize) {
+        let mut thread = self.thread.lock();
+        let t = thread.get_mut(&id).unwrap();
         let mut process = self.process.lock();
-        let p = process.get_mut(&pid).unwrap();
-        p.free_heap(addr);
+        let p = process.get_mut(&t.info.pid).unwrap();
+        p.join_num += 1;
+        if p.join_num >= p.tid.len() {
+            for tid in p.tid.iter() {
+                thread.get_mut(tid).unwrap().info.state = TaskState::Waiting;
+            }
+            p.join_num = 0;
+        }
+        else {
+            t.info.state = TaskState::Sleeping;
+        }
     }
 }
 

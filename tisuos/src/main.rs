@@ -56,6 +56,7 @@ mod filesystem;
 mod graphic;
 mod panic;
 mod desktop;
+mod rtc;
 use interrupt::trap;
 use task::process;
 use tisu_sync::SpinMutex;

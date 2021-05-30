@@ -52,7 +52,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
     let mut pc = env.epc;
 
     if sync {
-        if num != 8 && num != 9 && num != 11{
+        if num != 8 && num != 9 && num != 11 && num != STORE_PAGE_FAULT && num != LOAD_PAGE_FAULT {
             println!("into m_trap cause: {:x}, hartid: {:x}, status: {:x}, epc: {:x}, sp: {:x} st:{:x} ed:{:x},
                 satp {:x}, mscratch {:x}, mtval {:x}",
                 cause, hartid, _status, env.epc, env.regs[Register::SP.val()],
@@ -66,7 +66,15 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
         match num {
             INSTRUCTION_ADDRESS_MISALIGNED => panic!("Instruction address misaligned"),
             INSTRUCTION_ACCESS_FAULT => panic!("Instruction access fault"),
-            ILLEGAL_INSTRUCTION => panic!("Illegal instruction"),
+            ILLEGAL_INSTRUCTION => {
+                let satp = SATP::from(env.satp);
+                let addr = satp.get_target(env.epc);
+                println!("epc {:x}, mtval {:x} target pa {:x} val {:x}", env.epc,
+                    mtval, addr, unsafe{((addr + env.epc % PAGE_SIZE) as *const u32).read_volatile()});
+                let mgr = get_task_mgr().unwrap();
+                let (e, _) = mgr.get_current_task(hartid).unwrap();
+                panic!("pid {} tid {} illegal instruction", e.pid, e.tid);
+            },
             BREAKPOINT => {
                 println!("Breakpoint");
                 pc += 2;
@@ -75,7 +83,6 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
             STORE_ADDRESS_MISALIGNED => panic!("Store address misalign"),
             STORE_ACCESS_FAULT => panic!("Store access fault"),
             MACHINE_ENVIRONMENT_CALL => {
-                // env.regs[Register::A0.val()] = syscall::handler(env);
                 pc += 4;
             },
             SUPERVISOR_ENVIRONMENT_CALL|USER_ENVIRONMENT_CALL=> {
@@ -94,9 +101,45 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                     pc = waiting as usize;
                 }
             }
-            INSTRUCTION_PAGE_FAULT => panic!("Instruction page fault"),
-            LOAD_PAGE_FAULT => panic!("Load page fault"),
-            STORE_PAGE_FAULT => panic!("Store page fault"),
+            INSTRUCTION_PAGE_FAULT => {
+                let satp = SATP::from(env.satp);
+                let addr = satp.get_target(env.epc);
+                println!("epc {:x}, mtval {:x} target pa {:x} val {:x}", env.epc,
+                    mtval, addr, unsafe{((addr + env.epc % PAGE_SIZE) as *const u32).read_volatile()});
+                let mgr = get_task_mgr().unwrap();
+                let (e, _) = mgr.get_current_task(hartid).unwrap();
+                panic!("pid {} tid {} Instruction page fault", e.pid, e.tid);
+            },
+            LOAD_PAGE_FAULT => {
+                println!("load page fault");
+                let mgr = get_task_mgr().unwrap();
+                let id =mgr.get_current_task(hartid).unwrap().0.tid;
+                if mgr.expand_stack(id).is_err() {
+                    println!("into m_trap cause: {:x}, hartid: {:x}, status: {:x}, epc: {:x}, sp: {:x} st:{:x} ed:{:x},
+                        satp {:x}, mscratch {:x}, mtval {:x}",
+                        cause, hartid, _status, env.epc, env.regs[Register::SP.val()],
+                        unsafe {MEMORY_END + MAX_HEAP_SIZE}, unsafe {MEMORY_END}, env.satp,
+                        (env as *const Environment) as usize, mtval);
+                    let (e, _) = mgr.get_current_task(hartid).unwrap();
+                    let satp = SATP::from(env.satp);
+                    println!("flag {:x}", satp.get_target(mtval));
+                    panic!("pid {} tid {} Load page fault", e.pid, e.tid);
+                }
+            },
+            STORE_PAGE_FAULT => {
+                println!("store page fault");
+                let mgr = get_task_mgr().unwrap();
+                let id =mgr.get_current_task(hartid).unwrap().0.tid;
+                if mgr.expand_stack(id).is_err() {
+                    println!("into m_trap cause: {:x}, hartid: {:x}, status: {:x}, epc: {:x}, sp: {:x} st:{:x} ed:{:x},
+                        satp {:x}, mscratch {:x}, mtval {:x}",
+                        cause, hartid, _status, env.epc, env.regs[Register::SP.val()],
+                        unsafe {KERNEL_STACK_START}, unsafe {KERNEL_STACK_END}, env.satp,
+                        (env as *const Environment) as usize, mtval);
+                    let (e, _) = get_task_mgr().unwrap().get_current_task(hartid).unwrap();
+                    panic!("pid {} tid {} Load page fault", e.pid, e.tid);
+                }
+            },
             _ => panic!("unknown sync number: {:016x}", num),
         }
     }
@@ -114,7 +157,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
                 write_satp(0);
                 pc = waiting as usize;
             },
-            SUPERVISOR_TIMER => println!("Machine timer interrupt"),
+            SUPERVISOR_TIMER => println!("supervisor timer interrupt"),
             MACHINE_TIMER => {
                 timer::set_next_timer();
                 unsafe {
@@ -140,6 +183,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
 }
 
 
-use crate::{interrupt::environment::Register, libs::cpu::write_satp, memory::config::{KERNEL_STACK_END, KERNEL_STACK_START}, task::{get_task_mgr}};
+
+use crate::{interrupt::environment::Register, libs::cpu::write_satp, memory::{config::{KERNEL_STACK_END, KERNEL_STACK_START, MEMORY_END, PAGE_SIZE}, map::SATP}, task::{get_task_mgr, process::MAX_HEAP_SIZE}};
 use crate::{plic, cpu};
 use super::{environment::Environment, syscall, timer};

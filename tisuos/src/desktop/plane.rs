@@ -68,9 +68,7 @@ impl Plane {
             ContentType::Text, Some(id));
         self.dock.add_func(DockFuncType::TriggerTerminal(window.id));
         self.window.push(window);
-        println!("set invalid");
         self.invalid.set_true();
-        println!("after set invalid");
     }
 
     fn do_event(&mut self, event : PlaneEvent) {
@@ -121,7 +119,6 @@ impl Plane {
                     Ok(Key::MouseLeft | Key::MouseRight | Key::MouseMid) => {
                         self.mouse.get_key_down(key.unwrap());
                         let pos = get_mouse_position();
-                        println!("{:?}", pos);
                         self.focus_window(Position::from_scale_point(pos));
                         self.invalid.set_true();
                     }
@@ -187,15 +184,13 @@ impl Plane {
                 event = self.keyboard.pop_event();
                 v.push(e);
             }
-            let mut event = self.mouse.pop_event();
-            while event.is_some() {
+            while let Some(event) = self.mouse.pop_event() {
                 let mut e;
                 if window.focus(self.mouse.get_current_position()) {
-                    e = window.do_mouse_event(event.unwrap());
+                    e = window.do_mouse_event(event);
                     v.push(e);
                 }
-                e = self.dock.do_mouse_event(event.unwrap());
-                event = self.mouse.pop_event();
+                e = self.dock.do_mouse_event(event);
                 v.push(e);
             }
         }
@@ -220,7 +215,10 @@ impl Plane {
         for (idx, window) in self.window.iter_mut().rev().enumerate() {
             if window.focus(point) {
                 let len = self.window.len();
-                self.window.swap(len - idx - 1, len - 1);
+                let st = len - idx - 1;
+                for i in st..len - 1 {
+                    self.window.swap(i, i + 1);
+                }
                 break;
             }
         }

@@ -10,12 +10,12 @@ pub fn pending(){
 }
 
 pub fn output_handler() {
-    let uart = Uart::new();
+    // let uart = Uart::new();
     unsafe {
         loop {
             asm!("wfi");
             while let Some(c) = pop_output() {
-                uart.put(c as u8)
+                print!("{}", c);
             }
         }
     }

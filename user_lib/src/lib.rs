@@ -19,6 +19,7 @@ mod memory;
 pub mod stdio;
 
 pub use stdio::Stdio;
+use tisu_sync::SpinMutex;
 
 #[linkage = "weak"]
 #[no_mangle]
@@ -26,6 +27,7 @@ fn main(_argc: usize) -> i32 {
     panic!("Cannot find main!");
 }
 
+pub static mut MUTEX : SpinMutex = SpinMutex::new();
 
 #[macro_export]
 macro_rules! print {
@@ -42,9 +44,17 @@ macro_rules! println
 		   print!("\r\n")
 		   });
 	($fmt:expr) => ({
-			$crate::print!(concat!($fmt, "\r\n"))
+        unsafe {
+            $crate::MUTEX.lock();
+			$crate::print!(concat!($fmt, "\r\n"));
+            $crate::MUTEX.unlock();
+        }
 			});
 	($fmt:expr, $($args:tt)+) => ({
-			$crate::print!(concat!($fmt, "\r\n"), $($args)+)
-			});
+        unsafe {
+            $crate::MUTEX.lock();
+			$crate::print!(concat!($fmt, "\r\n"), $($args)+);
+            $crate::MUTEX.unlock();
+        }
+        });
 }

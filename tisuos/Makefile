@@ -1,111 +1,70 @@
-# Building
-TARGET := riscv64gc-unknown-none-elf
-MODE := release
-KERNEL_ELF := target/$(TARGET)/$(MODE)/os
-KERNEL_BIN := $(KERNEL_ELF).bin
-DISASM_TMP := target/$(TARGET)/$(MODE)/asm
-FS_IMG := ../user/target/$(TARGET)/$(MODE)/fs.img
-SDCARD := /dev/sdb
-APPS := ../user/src/bin/*
+#####
+## BUILD
+#####
+CC=riscv64-unknown-elf-gcc
+CFLAGS=-Wall -Wextra -pedantic -Wextra -O0 -g
+CFLAGS+=-static -ffreestanding -nostdlib -fno-rtti -fno-exceptions
+CFLAGS+=-march=rv64gc -mabi=lp64
+INCLUDES=
+LINKER_SCRIPT=-Tsrc/lds/virt.lds
+TYPE=debug
+RUST_TARGET=./target/riscv64gc-unknown-none-elf/$(TYPE)
+KERNEL_ELF=$(RUST_TARGET)/tisuos
+LIBS=-L$(RUST_TARGET)
+SOURCES_ASM=$(wildcard src/asm/*.S)
+LIB=-l tisuos -lgcc
+OUT=os.elf
 
-# BOARD
-BOARD ?= qemu
-SBI ?= rustsbi
-BOOTLOADER := ../bootloader/$(SBI)-$(BOARD).bin
-K210_BOOTLOADER_SIZE := 131072
+#####
+## QEMU
+#####
+QEMU=qemu-system-riscv64
+MACH=virt
+CPU=rv64
+CPUS=4
+MEM=512M
+DISK1=hd.dsk
+DISK2=img
+DEVICE = -device virtio-tablet-device\
+ -device virtio-keyboard-device\
+ -drive if=none,format=raw,file=$(DISK1),id=foo -device virtio-blk-device,scsi=off,drive=foo\
+ -drive if=none,format=raw,file=$(DISK2),id=fo1 -device virtio-blk-device,scsi=off,drive=fo1
 
-# KERNEL ENTRY
-ifeq ($(BOARD), qemu)
-	KERNEL_ENTRY_PA := 0x80200000
-else ifeq ($(BOARD), k210)
-	KERNEL_ENTRY_PA := 0x80020000
-endif
+NET_DEVICE = -device virtio-net-device
+GPU_DEVICE = -device virtio-gpu-device
 
-# Run K210
-K210-SERIALPORT	= /dev/ttyUSB0
-K210-BURNER	= ../tools/kflash.py
+build: env
+	cargo +nightly build --target=riscv64gc-unknown-none-elf
+# $(CC) $(CFLAGS) $(LINKER_SCRIPT) $(INCLUDES) -o $(OUT) $(SOURCES_ASM) $(LIBS) $(LIB)
 
-# Binutils
-OBJDUMP := rust-objdump --arch-name=riscv64
-OBJCOPY := rust-objcopy --binary-architecture=riscv64
-
-# Disassembly
-DISASM ?= -x
-
-build: env $(KERNEL_BIN) $(FS_IMG)
+$(DISK2):
+	@cd ../user_lib && make build
 
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
-#	cargo install cargo-binutils --vers ~0.2
 	rustup component add rust-src
 	rustup component add llvm-tools-preview
 
-sdcard: $(FS_IMG)
-	@echo "Are you sure write to $(SDCARD) ? [y/N] " && read ans && [ $${ans:-N} = y ]
-	@sudo dd if=/dev/zero of=$(SDCARD) bs=1048576 count=16
-	@sudo dd if=$(FS_IMG) of=$(SDCARD)
+run: build $(DISK2)
+	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM) $(DEVICE) \
+	-nographic -serial mon:stdio -bios none -kernel $(KERNEL_ELF) -rtc base=localtime
 
-$(KERNEL_BIN): kernel
-	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
+debug: build $(DISK2)
+	$(QEMU) -s -S -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM) $(DEVICE) \
+	-nographic -serial mon:stdio -bios none -kernel $(KERNEL_ELF) -rtc base=localtime
 
-$(FS_IMG): $(APPS)
-	@cd ../user && make build
-	@cd ../easy-fs-fuse && cargo run --release -- -s ../user/src/bin/ -t ../user/target/riscv64gc-unknown-none-elf/release/
+graphic: build
+	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM) $(DEVICE) $(GPU_DEVICE) \
+	-serial mon:stdio -bios none -kernel $(KERNEL_ELF)
 
-$(APPS):
+gdb:
+	@echo $(KERNEL_ELF)
+	@echo target remote localhost:1234
+	riscv64-unknown-elf-gdb
 
-kernel:
-	@echo Platform: $(BOARD)
-	@cp src/linker-$(BOARD).ld src/linker.ld
-	@cargo build --release --features "board_$(BOARD)"
-	@rm src/linker.ld
+objdump:
+	riscv64-unknown-elf-objdump -d target/riscv64gc-unknown-none-elf/debug/tisuos > os.txt
 
+.PHONY: clean
 clean:
-	@cargo clean
-
-disasm: kernel
-	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less
-
-disasm-vim: kernel
-	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) > $(DISASM_TMP)
-	@vim $(DISASM_TMP)
-	@rm $(DISASM_TMP)
-
-run: run-inner
-
-run_graphic: build
-	@qemu-system-riscv64 \
-		-bios $(BOOTLOADER) \
-		-serial mon:stdio \
-		-device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) \
-		-drive file=$(FS_IMG),if=none,format=raw,id=x0 \
-		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
-		-device virtio-gpu-device -machine virt
-
-run-inner: build
-ifeq ($(BOARD),qemu)
-	@qemu-system-riscv64 \
-		-machine virt \
-		-nographic \
-		-bios $(BOOTLOADER) \
-		-device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) \
-		-drive file=$(FS_IMG),if=none,format=raw,id=x0 \
-        -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
-		-device virtio-tablet-device
-else
-	(which $(K210-BURNER)) || (cd .. && git clone https://github.com/sipeed/kflash.py.git && mv kflash.py tools)
-	@cp $(BOOTLOADER) $(BOOTLOADER).copy
-	@dd if=$(KERNEL_BIN) of=$(BOOTLOADER).copy bs=$(K210_BOOTLOADER_SIZE) seek=1
-	@mv $(BOOTLOADER).copy $(KERNEL_BIN)
-	@sudo chmod 777 $(K210-SERIALPORT)
-	python3 $(K210-BURNER) -p $(K210-SERIALPORT) -b 1500000 $(KERNEL_BIN)
-	python3 -m serial.tools.miniterm --eol LF --dtr 0 --rts 0 --filter direct $(K210-SERIALPORT) 115200
-endif
-
-debug: build
-	@tmux new-session -d \
-		"qemu-system-riscv64 -machine virt -nographic -bios $(BOOTLOADER) -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) -s -S" && \
-		tmux split-window -h "riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \
-		tmux -2 attach-session -d
-
-.PHONY: build env kernel clean disasm disasm-vim run-inner
+	cargo clean

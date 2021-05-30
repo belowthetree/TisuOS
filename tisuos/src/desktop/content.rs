@@ -5,6 +5,7 @@
 
 const FILE_SIZE : usize = 80;
 const BACKGROUND : Pixel = Pixel::black();
+const MASK_COLOR : Pixel = Pixel{r:0,g:0,b:255,a:30};
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ContentType {
@@ -22,13 +23,13 @@ pub struct Content {
     pub ctx : Grid,
     pub ctype : ContentType,
     pub directory : Directory,
-    pub task_id : Option<usize>,
+    pub program_id : Option<usize>,
     pub idx : usize,
 }
 
 impl Content {
     pub fn new(x: usize, y: usize, width: usize, height: usize, ctype: ContentType,
-            task_id:Option<usize>)->Self {
+            program_id:Option<usize>)->Self {
         let grid;
         let dir = enter("0/".to_string()).unwrap();
         match ctype {
@@ -46,7 +47,7 @@ impl Content {
             ctx : grid,
             ctype,
             directory : dir,
-            task_id,
+            program_id,
             idx : 0,
         };
         if ctype == ContentType::File {
@@ -68,12 +69,9 @@ impl Content {
     }
 
     pub fn get_key(&mut self, c : char) {
-        // self.write_char(c, FONT_COLOR);
-        if let Some(id) = self.task_id {
-            println!("push {}", c);
+        if let Some(id) = self.program_id {
             push_task_in(id, c);
         }
-        println!("after get key");
     }
 
     pub fn do_mouse_event(&mut self, event : MouseEvent)->ContentEvent {
@@ -98,10 +96,25 @@ impl Content {
                                     + &self.directory.item.get(idx).unwrap().name[..];
                                 println!("path {}", path);
                                 let id = exec(path);
+                                let id = get_task_mgr().unwrap().get_task_exec(id).unwrap().pid;
                                 if id > 0 {
                                     return ContentEvent::Exec(id)
                                 }
                             }
+                        }
+                    }
+                }
+            }
+            super::mouse::MouseEventType::LeftClick => {
+                if self.ctype == ContentType::Text {
+                    return ContentEvent::None;
+                }
+                else {
+                    if let super::mouse::MouseEventInfo::Point(point) = event.info {
+                        if let Some(idx) = self.detect(point) {
+                            self.refresh();
+                            self.ctx.mask(idx, MASK_COLOR);
+                            return ContentEvent::Invalid;
                         }
                     }
                 }
@@ -112,9 +125,9 @@ impl Content {
     }
 
     pub fn run(&mut self)->ContentEvent {
-        if let Some(task_id) = self.task_id {
+        if let Some(program_id) = self.program_id {
             let mut s = String::new();
-            while let Some(c) = pop_task_out(task_id) {
+            while let Some(c) = pop_task_out(program_id) {
                 s.push(c);
             }
             if s.len() > 0 {
@@ -186,7 +199,7 @@ impl Content {
 
 use core::cmp::min;
 
-use crate::{filesystem::{get_system, io::enter, pop_task_out, push_task_in, request}, graphic::canvas::texblock::TexBlock, libs::{shape::Position, syscall::exec}};
+use crate::{filesystem::{get_system, io::enter, pop_task_out, push_task_in, request}, graphic::canvas::texblock::TexBlock, libs::{shape::Position, syscall::exec}, task::get_task_mgr};
 use alloc::prelude::v1::*;
 use tisu_fs::{Directory, SystemOp};
 use crate::{graphic::canvas::{grid::Grid}, libs::{font::{FONT_HEIGHT, FONT_WIDTH}, graphic::Pixel, shape::{Vector}}};

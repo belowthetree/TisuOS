@@ -52,6 +52,7 @@ impl Uart {
     pub fn new() -> Self {
         Uart
     }
+
     /// ## 初始化 UART
     /// 主要包括：
     /// lcr：每次传输的数据位数
@@ -78,6 +79,7 @@ impl Uart {
             ptr.add(3).write_volatile(lcr);
         }
     }
+
     /// ## 获取键盘输入
     /// 从 MMIO 对应地址获取输入
     pub fn get(&self) -> Option<u8> {
@@ -91,6 +93,7 @@ impl Uart {
             }
         }
     }
+
     /// ## 输出
     /// 通过 MMIO 的方式
     pub fn put(&self, c : u8) {

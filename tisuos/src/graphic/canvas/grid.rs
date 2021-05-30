@@ -95,13 +95,15 @@ impl Grid {
         }
         self.colorblock.draw_override();
     }
+
     pub fn draw_blend(&mut self) {
         if self.refresh {
             self.transfer();
         }
         self.colorblock.draw_blend();
     }
-    /// ### 在 idx 对应的各自里填充颜色
+
+    /// ### 在 idx 对应的格子里填充颜色
     pub fn fill_color(&mut self, idx : usize, color : Pixel) {
         if idx >= self.block_num {
             self.expand();
@@ -113,7 +115,8 @@ impl Grid {
         }
         self.refresh = true;
     }
-    /// ### 在 idx 对应的各自里填充字符
+
+    /// ### 在 idx 对应的格子里填充字符
     pub fn fill_font(&mut self, idx : usize, c : char, foreground : Pixel, background : Pixel) {
         if idx >= self.block_num {
             self.expand();
@@ -152,6 +155,7 @@ impl Grid {
         }
         self.refresh = true;
     }
+
     /// ### 从某个画布块中获取一块内容进行填充
     pub fn from_block<T:GridBlock>(&mut self, idx : usize, block : &T, alpha : bool) {
         if idx >= self.block_num {
@@ -196,6 +200,24 @@ impl Grid {
         }
         self.refresh = true;
     }
+
+    /// ### 根据 alpha 添加遮罩
+    pub fn mask(&mut self, idx : usize, color : Pixel) {
+        if idx >= self.block_num {
+            self.expand();
+        }
+        let x = idx % self.line_num * self.grid_width;
+        let y = idx / self.line_num * self.grid_height;
+        for y in y..(y + self.grid_height) {
+            let y = y * self.width;
+            for x in x..(x + self.grid_width) {
+                let id = x as usize + y;
+                let color = blend(&self.buffer.get(id).unwrap(), &color);
+                self.buffer.set(id, color, 1);
+            }
+        }
+        self.refresh = true;
+    }
 }
 
 impl Grid {
@@ -204,6 +226,7 @@ impl Grid {
             self.display_line * self.width, self.width * self.height);
         self.refresh = false;
     }
+
     fn expand(&mut self) {
         let buffer = Block::<Pixel>::new(self.width * (self.height + self.colorblock.height));
         buffer.copy_from(0, &self.buffer, 0, self.width * self.height);
@@ -211,6 +234,7 @@ impl Grid {
         self.height = self.height + self.colorblock.height;
         self.block_num = self.width / self.grid_width * (self.height / self.grid_height);
     }
+
     pub fn scroll(&mut self, offset : isize) {
         let mut line = self.display_line as isize + offset;
         if line < 0 {
@@ -222,14 +246,23 @@ impl Grid {
         self.display_line = line as usize;
         self.refresh = true;
     }
+
     pub fn fill(&mut self, color : Pixel) {
-        self.display_line = 0;
         self.buffer.set(0, color, self.buffer.size);
         self.refresh = true;
     }
 }
 
-
+pub fn blend(c1 : &Pixel, other : &Pixel)->Pixel {
+    let rate2 = other.a as f32 / 255.0;
+    let rate1 = 1.0 - rate2;
+    Pixel {
+        r : (rate1 * c1.r as f32 + rate2 * other.r as f32) as u8,
+        g : (rate1 * c1.g as f32 + rate2 * other.g as f32) as u8,
+        b : (rate1 * c1.b as f32 + rate2 * other.b as f32) as u8,
+        a : 255,
+    }
+}
 
 use core::cmp::min;
 

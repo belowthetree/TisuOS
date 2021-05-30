@@ -61,12 +61,13 @@ impl SATP {
 
 /// 操作方法
 impl SATP {
+    pub fn get_target(&self, va:usize)->usize {
+        self.get_page_table().get_target(va)
+    }
+
     pub fn map_data(&self, va:usize, pa:usize, is_kernel:bool) {
         let pt = self.get_page_table();
         if is_kernel {
-            if pa == 0x84471000 {
-                println!("map data {:x} {:x}", va, pa);
-            }
             pt.map_kernel_data(va, pa);
         }
         else {

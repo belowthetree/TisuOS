@@ -22,4 +22,4 @@ extern "C" {
 }
 
 pub const PAGE_SIZE : usize = 4096;
-pub const KERNEL_PAGE_NUM : usize = 25600;
+pub const KERNEL_PAGE_NUM : usize = 51200;

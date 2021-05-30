@@ -18,7 +18,7 @@ static mut STDOUT : ContentMutex<Stdout> = ContentMutex::new(Stdout::new(), true
 pub static mut TASK_IN : 
     Option<ContentMutex<BTreeMap<usize, Stdin>>> = None;
 pub static mut TASK_OUT : 
-    Option<ContentMutex<BTreeMap<usize, Stdin>>> = None;
+    Option<ContentMutex<BTreeMap<usize, Stdout>>> = None;
 
 pub fn init() {
     unsafe {
@@ -27,43 +27,43 @@ pub fn init() {
     }
 }
 
-pub fn push_task_in(task_id : usize, c : char) {
+pub fn push_task_in(program_id : usize, c : char) {
     unsafe {
         if let Some(tt) = &mut TASK_IN {
             let mut t = tt.lock();
-            if let Some(stdin) = t.get_mut(&task_id) {
+            if let Some(stdin) = t.get_mut(&program_id) {
                 stdin.push(c);
             }
             else {
                 let mut stdin = Stdin::new();
                 stdin.push(c);
-                t.insert(task_id, stdin);
+                t.insert(program_id, stdin);
             }
         }
     }
 }
 
-pub fn push_task_out(task_id : usize, c : char) {
+pub fn push_task_out(program_id : usize, c : char) {
     unsafe {
         if let Some(tt) = &mut TASK_OUT {
             let mut t = tt.lock();
-            if let Some(stdout) = t.get_mut(&task_id) {
+            if let Some(stdout) = t.get_mut(&program_id) {
                 stdout.push(c);
             }
             else {
-                let mut stdout = Stdin::new();
+                let mut stdout = Stdout::new();
                 stdout.push(c);
-                t.insert(task_id, stdout);
+                t.insert(program_id, stdout);
             }
         }
     }
 }
 
-pub fn pop_task_in(task_id : usize)->Option<char> {
+pub fn pop_task_in(program_id : usize)->Option<char> {
     unsafe {
         if let Some(tt) = &mut TASK_IN {
             let mut t = tt.lock();
-            if let Some(stdin) = t.get_mut(&task_id) {
+            if let Some(stdin) = t.get_mut(&program_id) {
                 return stdin.pop();
             }
         }
@@ -71,11 +71,11 @@ pub fn pop_task_in(task_id : usize)->Option<char> {
     }
 }
 
-pub fn pop_task_out(task_id : usize)->Option<char> {
+pub fn pop_task_out(program_id : usize)->Option<char> {
     unsafe {
         if let Some(tt) = &mut TASK_OUT {
             let mut t = tt.lock();
-            if let Some(stdout) = t.get_mut(&task_id) {
+            if let Some(stdout) = t.get_mut(&program_id) {
                 return stdout.pop();
             }
         }

@@ -7,7 +7,7 @@ pub trait TaskPoolOp : TaskPoolBasicOp + TaskComplexOp + TaskResourceOp + TaskSc
 /// ## 任务池操作要求
 /// 与任务池的操作根据任务号进行，不获取引用，以便模块化
 pub trait TaskPoolBasicOp {
-    fn create(&mut self, program : ProgramArea)->Option<usize>;
+    fn create(&mut self, program : ProgramArea, env : &Environment)->Option<usize>;
     fn fork(&mut self, env : &Environment)->Option<usize>;
     fn branch(&mut self, env : &Environment)->Option<usize>;
 
@@ -42,11 +42,17 @@ pub trait TaskComplexOp {
 
     fn virt_to_phy(&self, id:usize, va:usize)->usize;
 
+    /// 等待某个 task 结束，等待者应该退出调度，唤醒操作应该在
     fn wait_task(&mut self, waiter: usize, target: usize);
 
+    /// 检查是否有任务达到了定时器的唤醒时间
     fn check_timer(&mut self, time : usize);
 
     fn set_timer(&mut self, id : usize, time : usize);
+
+    fn expand_stack(&mut self, id : usize)->Result<(),()>;
+
+    fn join(&mut self, id : usize);
 }
 
 pub trait TaskResourceOp {

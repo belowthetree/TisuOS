@@ -78,6 +78,23 @@ impl PageTable {
         | PageBit::Excute.val() | PageBit::Write.val());
     }
 
+    pub fn get_target(&self, virtual_addr : usize)->usize {
+        let vpn = [
+            (virtual_addr >> 30) & 0x1ff,
+            (virtual_addr >> 21) & 0x1ff,
+            (virtual_addr >> 12) & 0x1ff
+        ];
+        let pte_first = &self.entry[vpn[0]];
+        assert!(pte_first.is_valid());
+        let table_mid = unsafe {&mut *(pte_first.get_ppn() as *mut Self)};
+        let pte_mid = &mut table_mid.entry[vpn[1]];
+        
+        assert!(pte_mid.is_valid());
+        let table_final = unsafe {&mut *(pte_mid.get_ppn() as *mut Self)};
+        let pte_final = &mut table_final.entry[vpn[2]];
+        pte_final.flag as usize
+    }
+
     fn map(&mut self, virtual_addr : usize, physic_addr : usize, flag : u64){
         let vpn = [
             (virtual_addr >> 30) & 0x1ff,
@@ -103,14 +120,10 @@ impl PageTable {
             pte_mid.set_valid();
         }
         let table_final = unsafe {&mut *(pte_mid.get_ppn() as *mut Self)};
-        let addr = table_final as *const PageTable as usize;
         let pte_final = &mut table_final.entry[vpn[2]];
         pte_final.flag = 0;
         pte_final.set_leaf_ppn(physic_addr as u64);
         pte_final.set_flag(flag);
-        if physic_addr == 0x84471000 {
-            println!("pa {:x}, flag {:x} {:x}", physic_addr, pte_final.flag, addr);
-        }
         pte_final.set_valid();
     }
 

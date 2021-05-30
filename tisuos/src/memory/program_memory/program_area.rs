@@ -44,9 +44,8 @@ impl Area {
     pub fn kernel_data()->Self {
         let vst = unsafe {DATA_START};
         let ved = unsafe {HEAP_START + KERNEL_PAGE_NUM * PAGE_SIZE};
-        let ved = ved / PAGE_SIZE * PAGE_SIZE;
+        let ved = (ved + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE;
         let vst = vst / PAGE_SIZE * PAGE_SIZE;
-        println!("data vst {:x} ved {:x}", vst, ved);
         Self {
             vst,
             ved,
@@ -59,8 +58,7 @@ impl Area {
     pub fn kernel_code()->Self {
         let vst = unsafe {MEMORY_START};
         let ved = unsafe {RODATA_END};
-        // println!("code vst {:x} ved {:x}", vst, ved);
-        let ved = ved / PAGE_SIZE * PAGE_SIZE;
+        let ved = (ved + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE;
         let vst = vst / PAGE_SIZE * PAGE_SIZE;
         Self {
             vst,
@@ -83,6 +81,28 @@ impl Area {
         }
     }
 
+    pub fn rtc_area()->Self {
+        let st = crate::rtc::BASE_ADDR / PAGE_SIZE * PAGE_SIZE;
+        let ed = (crate::rtc::BASE_ADDR + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE;
+        Self {
+            vst : st,
+            pst : st,
+            ved : ed,
+            ped : ed,
+            atype : AreaType::Data,
+        }
+    }
+
+    pub fn test_area()->Self {
+        Self {
+            vst : 0x10_0000,
+            ved : 0x10_1000,
+            ped : 0x10_1000,
+            pst : 0x10_0000,
+            atype : AreaType::Data,
+        }
+    }
+
     pub fn timer_area()->Self {
         let vst = 0x200_0000;
         let ved = 0x200_C000;
@@ -101,7 +121,7 @@ impl Area {
         let st = min(st, waiting as usize);
         let ed = max(process_exit as usize, thread_exit as usize);
         let ed = max(ed, waiting as usize);
-        let ed = ed / PAGE_SIZE * PAGE_SIZE;
+        let ed = (ed + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE;
         let st = st / PAGE_SIZE * PAGE_SIZE;
         Self {
             vst:st,
@@ -179,13 +199,7 @@ impl ProgramArea {
         for area in self.area.iter() {
             let mut vst = area.vst;
             let mut pst = area.pst;
-            while vst <= area.ved && pst <= area.ped {
-                if vst == 0x84471000 {
-                    println!("vst {:x}, pst {:x}", vst, pst);
-                }
-                // if 0x84346e90 <= vst && self.is_kernel && area.atype == AreaType::Data {
-                //     println!("satp {:x} vst: {:x}, pst: {:x}", satp.flag, vst, pst);
-                // }
+            while vst < area.ved && pst < area.ped {
                 match area.atype {
                     AreaType::Code => satp.map_code(vst, pst, self.is_kernel),
                     AreaType::Data => satp.map_data(vst, pst, self.is_kernel),
@@ -194,9 +208,6 @@ impl ProgramArea {
                 vst += PAGE_SIZE;
                 pst += PAGE_SIZE;
             }
-        }
-        if self.is_kernel {
-            println!("kernel satp {:x}", satp.flag);
         }
     }
 

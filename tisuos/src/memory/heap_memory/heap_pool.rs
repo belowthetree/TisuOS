@@ -56,7 +56,7 @@ impl HeapPool {
             virtual_base : virtual_addr,
             virtual_top : total_size + virtual_addr,
             page_num,
-            total_size : total_size,
+            total_size,
             block_size,
             record : inner.array(0, block_num),
             use_num : 0,
@@ -98,7 +98,6 @@ impl HeapPool {
             let t = i * PAGE_SIZE;
             let pa = self.physic_addr + t;
             let va = self.virtual_base + t;
-            // println!("satp {:x} heap map vst {:x} pst {:x} {}", satp.flag, va, pa, self.is_kernel);
             satp.map_data(va, pa, self.is_kernel);
         }
     }
@@ -119,7 +118,6 @@ impl HeapPool {
 
 impl Drop for HeapPool {
     fn drop(&mut self) {
-        // println!("heap pool drop {:x}", self.physic_addr);
         get_manager().free_page(self.physic_addr as *mut u8);
     }
 }

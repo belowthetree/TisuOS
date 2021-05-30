@@ -2,7 +2,7 @@
 //!
 //! 2021年4月29日 zg
 
-const STDOUT_BUFFER_SIZE : usize = 128;
+const STDOUT_BUFFER_SIZE : usize = 256;
 pub struct Stdout {
     buffer : [char;STDOUT_BUFFER_SIZE],
     read_idx : usize,
