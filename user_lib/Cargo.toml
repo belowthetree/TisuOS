@@ -12,7 +12,7 @@ edition = "2018"
 # tisu-driver = { path = "../../tisu-driver" }
 # tisu-fs = { path = "../../tisu-fs" }
 fs-format = { git = "https://github.com/TisuOS/fs-format", tag = "v4.0" }
-# tisu-sync = { git = "https://github.com/TisuOS/tisu-sync" }
+tisu-sync = { git = "https://github.com/TisuOS/tisu-sync" }
 virtio-input-decoder = "0.1.4"
 tisu-driver = { git = "https://github.com/TisuOS/tisu-driver", tag = "v3.0" }
 # tisu-fs = { git = "https://github.com/TisuOS/tisu-fs" }

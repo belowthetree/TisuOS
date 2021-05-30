@@ -27,7 +27,6 @@ DISK1=hd.dsk
 DISK2=img
 DEVICE = -device virtio-tablet-device\
  -device virtio-keyboard-device\
- -drive if=none,format=raw,file=$(DISK1),id=foo -device virtio-blk-device,scsi=off,drive=foo\
  -drive if=none,format=raw,file=$(DISK2),id=fo1 -device virtio-blk-device,scsi=off,drive=fo1
 
 NET_DEVICE = -device virtio-net-device
