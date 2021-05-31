@@ -94,10 +94,7 @@ impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
         self.task_pool.fork(env).unwrap()
     }
 
-    pub fn task_exit(&mut self, hartid : usize) {
-        let id = self.task_pool.find(|info|{
-            info.state == TaskState::Running && info.env.hartid == hartid
-        }).unwrap();
+    pub fn task_exit(&mut self, id : usize) {
         self.task_pool.remove_task(id).unwrap();
     }
 
@@ -129,10 +126,7 @@ impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
         self.task_pool.expand_stack(id)
     }
 
-    pub fn program_exit(&mut self, hartid : usize) {
-        let id = self.task_pool.find(|info|{
-            info.state == TaskState::Running && info.env.hartid == hartid
-        }).unwrap();
+    pub fn program_exit(&mut self, id : usize) {
         let info = self.task_pool.get_task_exec(id).unwrap();
         if info.is_main {
             self.task_pool.remove_program(id).unwrap();

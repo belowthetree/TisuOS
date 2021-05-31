@@ -35,8 +35,13 @@ const GET_TID           : usize = 31;
 
 static mut CLOSE_CNT : [usize;4] = [0;4];
 
-pub fn handler(env : &mut Environment) -> usize {
-    let mut rt = 0;
+pub enum SyscallResult {
+    Schedule(usize),
+    Normal(usize),
+}
+
+pub fn handler(env : &mut Environment)->SyscallResult {
+    let mut rt = SyscallResult::Normal(0);
     let num = env.regs[Register::A0.val()];
     match num {
         1 => {
@@ -50,12 +55,13 @@ pub fn handler(env : &mut Environment) -> usize {
         GET_TID => {
             let mgr = get_task_mgr().unwrap();
             let (exec, _) = mgr.get_current_task(env.hartid).unwrap();
-            rt = exec.tid;
+            rt = SyscallResult::Normal(exec.tid);
         }
         JOIN => {
             let mgr = get_task_mgr().unwrap();
             let (exec, _) = mgr.get_current_task(env.hartid).unwrap();
             mgr.join(exec.tid, env);
+            rt = SyscallResult::Schedule(0);
         }
         WAKE => {
             let mgr = get_task_mgr().unwrap();
@@ -65,6 +71,7 @@ pub fn handler(env : &mut Environment) -> usize {
             let mgr = get_task_mgr().unwrap();
             let (exec, _) = mgr.get_current_task(env.hartid).unwrap();
             mgr.sleep_task(exec.tid, env).unwrap();
+            rt = SyscallResult::Schedule(0);
         }
         SHUTDOWN => {
             unsafe {
@@ -96,32 +103,33 @@ pub fn handler(env : &mut Environment) -> usize {
         }
         KILL => {
             kill(env);
+            rt = SyscallResult::Schedule(0);
         }
         CLOSE => {
             close(env);
         }
         DIRECTORY_INFO => {
-            rt = directory_info(env);
+            rt = SyscallResult::Normal(directory_info(env));
         }
         GET_MOUSE_POS => {
-            rt = get_mouse_x();
+            rt = SyscallResult::Normal(get_mouse_x());
             env.regs[Register::A1.val()] = get_mouse_y();
         }
         GET_MOUSE_SCROLL => {
-            rt = get_scroll();
+            rt = SyscallResult::Normal(get_scroll());
         }
         GET_KEY_RELEASE => {
             if let Some(key) = get_key_release() {
-                rt = key;
+                rt = SyscallResult::Normal(key);
             }
         }
         GET_KEY_PRESS => {
             if let Some(key) = get_key_press() {
-                rt = key;
+                rt = SyscallResult::Normal(key);
             }
         }
         GET_TIME => {
-            rt = timer::get_micro_time();
+            rt = SyscallResult::Normal(timer::get_micro_time());
         }
         DRAW_RECT => {
             draw_rect(env);
@@ -136,7 +144,7 @@ pub fn handler(env : &mut Environment) -> usize {
                 let ptr = mgr.virt_to_phy(exec.tid, addr) as *const u8;
                 let data = unsafe{& *(slice_from_raw_parts(ptr, len))};
                 if let Ok(len) = write(exec.pid, id, data) {
-                    rt = len;
+                    rt = SyscallResult::Normal(len);
                 }
                 else {
                     println!("read fail")
@@ -153,7 +161,7 @@ pub fn handler(env : &mut Environment) -> usize {
                 let ptr = mgr.virt_to_phy(exec.tid, addr) as *mut u8;
                 let data = unsafe{&mut *(slice_from_raw_parts_mut(ptr, len))};
                 if let Ok(len) = read(exec.pid, id, data) {
-                    rt = len;
+                    rt = SyscallResult::Normal(len);
                 }
                 else {
                     println!("task {} read fail", exec.tid);
@@ -161,10 +169,10 @@ pub fn handler(env : &mut Environment) -> usize {
             }
         }
         FILE_INFO => {
-            rt = file_info(env);
+            rt = SyscallResult::Normal(file_info(env));
         }
         OPEN => {
-            rt = open(env) as usize;
+            rt = SyscallResult::Normal(open(env) as usize);
         }
         FREE => {
             let mgr = get_task_mgr().unwrap();
@@ -174,38 +182,44 @@ pub fn handler(env : &mut Environment) -> usize {
         WAIT => {
             let mgr = get_task_mgr().unwrap();
             mgr.wait_task(env, env.regs[Register::A1.val()]);
+            rt = SyscallResult::Schedule(0);
         }
         MALLOC => {
             let mgr = get_task_mgr().unwrap();
             let (exec, _) = mgr.get_current_task(env.hartid).unwrap();
             let t = mgr.alloc_heap(env.regs[Register::A1.val()], exec.tid);
-            rt = t.0;
+            rt = SyscallResult::Normal(t.0);
         }
         SET_TIMER => {
             let time = env.regs[Register::A1.val()];
             get_task_mgr().unwrap().sleep_timer(env, time);
+            rt = SyscallResult::Schedule(0);
         }
         EXEC => {
-            rt = exec(env);
+            rt = SyscallResult::Normal(exec(env));
         }
         PRINT_TASK => {
             get_task_mgr().unwrap().print();
         }
         BRANCH => {
-            rt = branch(env);
+            rt = SyscallResult::Normal(branch(env));
         }
         FORK => {
-            rt = fork(env);
+            rt = SyscallResult::Normal(fork(env));
         }
         PROGRAM_EXIT => {
             // println!("delete process");
             let mgr = get_task_mgr().unwrap();
-            mgr.program_exit(env.hartid);
+            let (e,_) = mgr.get_current_task(env.hartid).unwrap();
+            mgr.program_exit(e.tid);
+            rt = SyscallResult::Schedule(0);
         }
         THREAD_EXIT => {
             // println!("delete thread");
             let mgr = get_task_mgr().unwrap();
-            mgr.task_exit(env.hartid);
+            let (e,_) = mgr.get_current_task(env.hartid).unwrap();
+            mgr.task_exit(e.tid);
+            rt = SyscallResult::Schedule(0);
         }
         _ => {}
     }

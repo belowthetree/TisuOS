@@ -88,9 +88,14 @@ impl TaskPoolBasicOp for TaskPool {
     }
 
     fn get_task_prog(&self, id : usize)->Option<super::task_info::ProgramInfo> {
-        let id = self.thread.lock().get(&id).unwrap().info.pid;
-        let rt = self.process.lock().get(&id).unwrap().get_prog_info();
-        Some(rt)
+        if let Some(t) = self.thread.lock().get(&id) {
+            let id = t.info.pid;
+            let rt = self.process.lock().get(&id).unwrap().get_prog_info();
+            Some(rt)
+        }
+        else {
+            None
+        }
     }
 
     fn select<F>(&mut self, f : F)->Option<Vec<usize>> where F : Fn(&ExecutionInfo)->bool {

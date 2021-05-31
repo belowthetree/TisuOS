@@ -3,7 +3,6 @@
 //! 
 //! 2020年12月12日 zg
 
-#![allow(dead_code)]
 pub const FREQUENCY    : usize = 1000_0000;
 static MTIMECMP     : usize = 0x200_4000;
 static MTIME        : usize = 0x200_BFF8;
@@ -15,14 +14,6 @@ pub fn set_next_interrupt(seconds : usize){
         let mtimecmp = MTIMECMP as *mut u64;
         let mtime = MTIME as *mut u64;
         mtimecmp.write_volatile(mtime.read_volatile() + (seconds * FREQUENCY) as u64);
-    }
-}
-
-/// 获取当前计时器的计数
-pub fn get_time() -> u64{
-    unsafe {
-        let mtime = MTIME as *mut u64;
-        mtime.read_volatile()
     }
 }
 
