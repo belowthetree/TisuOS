@@ -2,19 +2,29 @@
 //! 系统调用转到这里处理
 //! 2020年12月18日 zg
 
+/// 进程退出自动调用
 const PROGRAM_EXIT  : usize = 60;
+/// 线程退出自动调用
 const THREAD_EXIT   : usize = 61;
 const FORK          : usize = 57;
 const BRANCH        : usize = 7;
+/// 调试用输出
 const PRINT_TASK    : usize = 5;
+/// 接收路径创建进程
 const EXEC          : usize = 4;
 const MALLOC        : usize = 8;
+/// 等待某个任务结束，@tid:usize
 const WAIT          : usize = 9;
+/// 睡眠调用者，定时唤醒，@time:usize
 const SET_TIMER     : usize = 10;
 const FREE          : usize = 11;
+/// 打开文件，@path:str;@flag:usize->id:usize
 const OPEN          : usize = 12;
+/// @id:usize->len:usize
 const READ          : usize = 13;
+/// 获取文件信息，@id:usize->*const FileInfo
 const FILE_INFO     : usize = 14;
+/// @id:usize->len:usize
 const WRITE         : usize = 15;
 const DRAW_RECT     : usize = 16;
 const GET_TIME      : usize = 17;
@@ -22,16 +32,25 @@ const GET_KEY_PRESS     : usize = 18;
 const GET_KEY_RELEASE   : usize = 19;
 const GET_MOUSE_SCROLL  : usize = 20;
 const GET_MOUSE_POS     : usize = 21;
+/// 获取目录信息，@id:usize->*const DirectoryInfo
 const DIRECTORY_INFO    : usize = 22;
+/// 关闭文件，打开后必须关闭，目前进程结束会自动关闭所有文件，@id:usize
 const CLOSE             : usize = 23;
+/// @id:usize
 const KILL              : usize = 24;
+/// 关闭时钟、软件中断
 const CLOSE_TIMER       : usize = 25;
+/// 开启时钟、软件中断
 const OPEN_TIMER        : usize = 26;
 const SHUTDOWN          : usize = 27;
+/// 使目标线程睡眠，@id:usize
 const SLEEP             : usize = 28;
+/// 唤醒目标线程，@id:usize
 const WAKE              : usize = 29;
+/// 暂停当前线程，等待同进程内其它线程
 const JOIN              : usize = 30;
 const GET_TID           : usize = 31;
+const NEXT              : usize = 32;
 
 static mut CLOSE_CNT : [usize;4] = [0;4];
 
@@ -51,6 +70,10 @@ pub fn handler(env : &mut Environment)->SyscallResult {
             println!("syscall test2");
         }
         3 => {
+            rt = SyscallResult::Normal(env.hartid);
+        }
+        NEXT => {
+            rt = SyscallResult::Schedule(0);
         }
         GET_TID => {
             let mgr = get_task_mgr().unwrap();

@@ -61,8 +61,10 @@ SECTIONS
   PROVIDE(_stack_end = _stack_start + 0x80000);
   PROVIDE(_trap_stack_start = _stack_end);
   PROVIDE(_trap_stack_end = _trap_stack_start + 0x160000);
+  PROVIDE(_trap_stack_start2 = _trap_stack_end);
+  PROVIDE(_trap_stack_end2 = _trap_stack_start2 + 0x160000);
   PROVIDE(_memory_end = ORIGIN(ram) + LENGTH(ram));
 
-  PROVIDE(_heap_start = _trap_stack_end);
+  PROVIDE(_heap_start = _trap_stack_end2);
   PROVIDE(_heap_size = _memory_end - _heap_start);
 }

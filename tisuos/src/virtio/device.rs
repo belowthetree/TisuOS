@@ -11,12 +11,14 @@ const VIRTIO_VAL : u32 = 0x74726976;
 type BlockDevice = tisu_driver::Block;
 type GraphicDevice = tisu_driver::GPU;
 type InputDevice = tisu_driver::InputDevice;
+type NetDevice = tisu_driver::Net;
 
 /// ## 全局设备管理
 pub struct Device {
     pub block_device : Vec<Box<dyn BlockDriver>>,
     pub gpu_device : Vec<Box<dyn GraphicDriver>>,
     pub input_device : Vec<Box<dyn Driver>>,
+    pub net_device : Vec<Box<dyn NetDriver>>,
     dtype : [(DeviceType, usize);9],
 }
 
@@ -27,6 +29,7 @@ impl Device {
             block_device : vec![],
             gpu_device : vec![],
             input_device : vec![],
+            net_device : vec![],
             dtype : [(DeviceType::Unknown, 0);9],
         };
         rt.search_device();
@@ -67,6 +70,13 @@ impl Device {
                 let dev = InputDevice::new(header, memory);
                 self.input_device.push(Box::new(dev));
             }
+            DeviceType::Network => {
+                println!("network");
+                self.dtype[pin_idx] = (DeviceType::Network, self.net_device.len());
+                let dev = NetDevice::new(header, memory);
+                println!("mac {:x}", dev.mac());
+                self.net_device.push(Box::new(dev));
+            }
             _ => {}
         }
     }
@@ -88,7 +98,9 @@ impl Device {
                     println!("{:?}", e);
                 }
             }
-            _ => {}
+            _ => {
+                println!("device pending err pin idx {}", pin_idx);
+            }
         }
     }
 
@@ -141,7 +153,9 @@ impl Device {
                     }
                 }
             }
-            _ => {}
+            _ => {
+                println!("device handle err pin idx {}", pin_idx);
+            }
         }
     }
 
@@ -159,6 +173,14 @@ impl Device {
         for gpu in self.gpu_device.iter_mut() {
             gpu.refresh();
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn send(&mut self) {
+        let net = self.net_device.get_mut(0).unwrap();
+        let data = Block::<Ip>::new(1); 
+        data.set(0, Ip::new(), 1);
+        net.send(&data.to_array(0, 1));
     }
 }
 
@@ -222,8 +244,8 @@ pub fn invalid(){
 use core::ptr::slice_from_raw_parts;
 
 use alloc::prelude::v1::*;
-use crate::{filesystem::push_input, memory::get_manager};
-use super::{config::{HEIGHT, WIDTH}, input_buffer::{add_key_press, add_key_release, add_mouse_x, add_mouse_y, add_scroll}};
+use crate::{filesystem::push_input, memory::{block::Block, get_manager}};
+use super::{config::{HEIGHT, WIDTH}, input_buffer::{add_key_press, add_key_release, add_mouse_x, add_mouse_y, add_scroll}, ip::Ip};
 use virtio_input_decoder::Decoder;
-use tisu_driver::{BlockDriver, DeviceType, Driver, GraphicDriver, Pixel, Rect, VirtHeader};
+use tisu_driver::{BlockDriver, DeviceType, Driver, GraphicDriver, Pixel, Rect, VirtHeader, NetDriver};
 use tisu_driver::InterruptOk;

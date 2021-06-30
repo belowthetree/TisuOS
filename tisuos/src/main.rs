@@ -17,6 +17,7 @@
 global_asm!(include_str!("asm/boot.S"));
 global_asm!(include_str!("asm/mem.S"));
 global_asm!(include_str!("asm/trap.S"));
+global_asm!(include_str!("asm/strap.S"));
 
 #[macro_use]
 extern crate alloc;
@@ -27,6 +28,7 @@ pub static mut M : SpinMutex = SpinMutex::new();
 extern "C" fn kernel_init(){
     Uart::new().init();
     trap::init(0);
+    strap::init(0);
     memory::init();
     // memory::test();
     plic::init();
@@ -40,6 +42,7 @@ extern "C" fn kernel_init(){
 #[no_mangle]
 extern "C" fn kernel_start(hartid : usize){
     trap::init(hartid);
+    strap::init(hartid);
 }
 
 #[macro_use]
@@ -57,7 +60,7 @@ mod graphic;
 mod panic;
 mod desktop;
 mod rtc;
-use interrupt::trap;
+use interrupt::{strap, trap};
 use task::process;
 use tisu_sync::SpinMutex;
 use uart::Uart;

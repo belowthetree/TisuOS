@@ -34,6 +34,7 @@ impl Process {
             is_kernel : program.is_kernel,
         };
         program.map(&info.satp);
+        program.map_kernel_trap(&info.satp);
         let rt = Process{
             info,
             is_kernel : program.is_kernel,
@@ -128,10 +129,10 @@ pub fn start_init_process(){
 
 /// 初始化进程
 pub fn init_process(){
+    disk_cache::init();
     timer::set_next_interrupt(0);
     filesystem::init();
-    let rt = fork();
-    if rt == 0 {
+    if fork() == 0 {
         console_shell::run();
     }
 
@@ -149,13 +150,18 @@ pub fn init_process(){
     unsafe {
         loop {
             asm!("wfi");
+            // let mut num = 0;
+            // for i in 0..100000 {
+            //     num += 1;
+            // }
+            // println!("{}", num);
         }
     }
 }
 
 
 extern crate alloc;
-use crate::{desktop::plane::Plane, filesystem, interact::{console_input::output_handler, console_shell}, interrupt::{environment::Environment, timer}, libs::syscall::{branch, fork}, memory::{Area, ProgramArea, config::{MEMORY_END, PAGE_SIZE}, heap_memory::TaskHeap, map::SATP}, virtio::device::gpu_support};
+use crate::{desktop::plane::Plane, filesystem, interact::{console_input::output_handler, console_shell}, interrupt::{environment::Environment, timer}, libs::syscall::{branch, fork}, memory::{Area, ProgramArea, config::{MEMORY_END, PAGE_SIZE}, heap_memory::TaskHeap, map::SATP}, virtio::{device::gpu_support, disk_cache}};
 
 use super::{resource::Resource, task_info::{ProgramInfo, TaskState}};
 use tisu_sync::AtomCounter;

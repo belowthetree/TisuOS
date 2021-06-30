@@ -92,7 +92,7 @@ impl PageTable {
         assert!(pte_mid.is_valid());
         let table_final = unsafe {&mut *(pte_mid.get_ppn() as *mut Self)};
         let pte_final = &mut table_final.entry[vpn[2]];
-        pte_final.flag as usize
+        (pte_final.flag as usize >> 10) << 12
     }
 
     fn map(&mut self, virtual_addr : usize, physic_addr : usize, flag : u64){
@@ -108,6 +108,9 @@ impl PageTable {
             pte_first.set_flag(flag &
                 !PageBit::Read.val() & !PageBit::Write.val() & !PageBit::Excute.val());
             pte_first.set_valid();
+            if virtual_addr == 0x1170c {
+                println!("first ppn {:x}", addr as usize);
+            }
         }
         let table_mid = unsafe {&mut *(pte_first.get_ppn() as *mut Self)};
         let pte_mid = &mut table_mid.entry[vpn[1]];
@@ -118,6 +121,9 @@ impl PageTable {
             pte_mid.set_flag(flag &
                 !PageBit::Read.val() & !PageBit::Write.val() & !PageBit::Excute.val());
             pte_mid.set_valid();
+            if virtual_addr == 0x1170c {
+                println!("second ppn {:x}", addr as usize);
+            }
         }
         let table_final = unsafe {&mut *(pte_mid.get_ppn() as *mut Self)};
         let pte_final = &mut table_final.entry[vpn[2]];
@@ -125,6 +131,9 @@ impl PageTable {
         pte_final.set_leaf_ppn(physic_addr as u64);
         pte_final.set_flag(flag);
         pte_final.set_valid();
+        if virtual_addr == 0x1170c {
+            println!("final ppn {:x} {:x}", pte_final.flag, self.get_target(virtual_addr));
+        }
     }
 
     pub fn free(&mut self){

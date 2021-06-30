@@ -16,11 +16,12 @@ edition = "2018"
 # device-buffer = { path = "../../device-buffer" }
 # tianmu-fs = { path = "../../tianmu-fs" }
 # fs-format = { path = "../../fs-format" }
-tisu-sync = { git = "https://github.com/TisuOS/tisu-sync", tag = "v2.0" }
-tisu-memory = { git = "https://github.com/TisuOS/tisu-memory", tag = "v3.0" }
-tisu-driver = { git = "https://github.com/TisuOS/tisu-driver", tag = "v3.0" }
-tisu-fs = { git = "https://github.com/TisuOS/tisu-fs", tag = "v4.0" }
-device-buffer = { git = "https://github.com/TisuOS/device-buffer", tag = "v4.0" }
-virtio-input-decoder = "0.1.4"
-tianmu-fs = { git = "https://github.com/TisuOS/tianmu-fs", tag = "v1.0" }
-fs-format = { git = "https://github.com/TisuOS/fs-format", tag = "v4.0" }
+riscv64 = { git = "https://gitee.com/TisuOS/riscv64" }
+tisu-sync = { git = "https://gitee.com/TisuOS/tisu-sync", tag = "v3.0" }
+tisu-memory = { git = "https://gitee.com/TisuOS/tisu-memory", tag = "v3.1" }
+tisu-driver = { git = "https://gitee.com/TisuOS/tisu-driver", tag = "v3.1" }
+tisu-fs = { git = "https://gitee.com/TisuOS/tisu-fs", tag = "v4.1" }
+device-buffer = { git = "https://gitee.com/TisuOS/device-buffer", tag = "v4.1" }
+virtio-input-decoder = { git = "https://gitee.com/TisuOS/virtio-input-decoder" }
+tianmu-fs = { git = "https://gitee.com/TisuOS/tianmu-fs", tag = "v1.0" }
+fs-format = { git = "https://gitee.com/TisuOS/fs-format", tag = "v4.1" }

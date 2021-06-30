@@ -5,7 +5,7 @@
 //! 2021年3月23日 zg
 
 
-use crate::{filesystem::{pop_task_out, push_task_in, push_task_out}, interrupt::{timer, environment::Environment}, libs::help::{switch_kernel_process, switch_user_process}, memory::ProgramArea};
+use crate::{filesystem::{pop_task_out, push_task_in, push_task_out}, interrupt::{environment::{Environment}, timer}, libs::{help::{start_kernel_process, switch_kernel_process, switch_user_process}, syscall::trigger_timer}, memory::ProgramArea};
 use tisu_sync::SpinMutex;
 use super::{require::{TaskPoolBasicOp, TaskPoolOp}, task_info::{ExecutionInfo, ProgramInfo, TaskState}};
 
@@ -44,7 +44,10 @@ impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
             info.env.hartid = hartid;
         }).unwrap();
         let mut info = self.task_pool.get_task_exec(id).unwrap();
-        self.switch_to(&mut info);
+        unsafe {
+            println!("before start");
+            start_kernel_process(&mut info.env as *mut Environment as *mut u8);
+        }
     }
 
     /// 调度器的调用及进程切换属于临界区，防止多核竞争错误
@@ -161,6 +164,7 @@ impl<T1 : SchedulerOp, T2 : TaskPoolOp> TaskManager<T1, T2> {
     }
 
     fn switch_to(&self, info : &mut ExecutionInfo) {
+        trigger_timer();
         if info.is_kernel {
             unsafe {
                 switch_kernel_process(&mut info.env as *mut Environment as *mut u8);

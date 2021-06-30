@@ -26,7 +26,7 @@ MEM=512M
 DISK1=hd.dsk
 DISK2=img
 DEVICE = -device virtio-tablet-device\
- -device virtio-keyboard-device\
+ -drive if=none,format=raw,file=$(DISK1),id=foo -device virtio-blk-device,scsi=off,drive=foo\
  -drive if=none,format=raw,file=$(DISK2),id=fo1 -device virtio-blk-device,scsi=off,drive=fo1
 
 NET_DEVICE = -device virtio-net-device
@@ -45,10 +45,10 @@ env:
 	rustup component add llvm-tools-preview
 
 run: build $(DISK2)
-	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM) $(DEVICE) \
+	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM) $(DEVICE) $(NET_DEVICE) \
 	-nographic -serial mon:stdio -bios none -kernel $(KERNEL_ELF) -rtc base=localtime
 
-debug: build $(DISK2)
+debug: build $(DISK2) objdump
 	$(QEMU) -s -S -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM) $(DEVICE) \
 	-nographic -serial mon:stdio -bios none -kernel $(KERNEL_ELF) -rtc base=localtime
 
@@ -57,7 +57,7 @@ graphic: build
 	-serial mon:stdio -bios none -kernel $(KERNEL_ELF)
 
 gdb:
-	@echo $(KERNEL_ELF)
+	@echo file $(KERNEL_ELF)
 	@echo target remote localhost:1234
 	riscv64-unknown-elf-gdb
 

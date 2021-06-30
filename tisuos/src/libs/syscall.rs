@@ -50,6 +50,18 @@ fn syscall_long(num : usize, a1 : usize, a2 : usize, a3 : usize, a4 : usize, a5:
     }
 }
 
+pub fn trigger_software(){
+    syscall(1, 0, 0, 0, 0);
+}
+
+pub fn trigger_timer(){
+    syscall(2, 0, 0, 0, 0);
+}
+
+pub fn get_hartid()->usize {
+    syscall(3, 0, 0, 0, 0)
+}
+
 pub fn sleep() {
     syscall(SLEEP, 0, 0, 0, 0);
 }

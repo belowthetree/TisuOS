@@ -12,6 +12,7 @@ extern "C" {
     fn thread_exit();
     fn process_exit();
     fn waiting();
+    fn s_trap_vector();
 }
 
 #[derive(Debug)]
@@ -209,6 +210,11 @@ impl ProgramArea {
                 pst += PAGE_SIZE;
             }
         }
+    }
+
+    pub fn map_kernel_trap(&self, satp : &SATP) {
+        let vst = s_trap_vector as usize;
+        satp.map_code(vst, vst, true);
     }
 
     pub fn virt_to_phy(&self, va:usize)->usize {

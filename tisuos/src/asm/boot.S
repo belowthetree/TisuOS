@@ -47,10 +47,10 @@ _start:
 	sub		sp, sp, t0
 
 	# 进入 M 模式，开启中断
-	li		t0, 0b11 << 11 | (1 << 7) | (1 << 13)
+	li		t0, 0b11 << 11 | (1 << 7) | (1 << 13) | 1 << 1
 	csrw	mstatus, t0
 	# 机器软件中断，通过核心 0 调用
-	li		t3, (1 << 3)
+	li		t3, 0xa
 	csrw	mie, t3
 	
 	csrr	a0, mhartid
@@ -59,6 +59,15 @@ _start:
 	
 	la		t2, m_trap_vector
 	csrw	mtvec, t2
+	la		t2, s_trap_vector
+	csrw	stvec, t2
+	li		t3, 1 << 1 | 1 << 13 | 1 << 5
+	csrw	sstatus, t3
+	li		t3, 0x222
+	csrw	mideleg, t3
+	csrw	sie, t3
+	li		t3, 0xe5ff
+	csrw	medeleg, t3
 
 	# Whenever our hart is done initializing, we want it to return to the waiting
 	# loop, which is just below mret.

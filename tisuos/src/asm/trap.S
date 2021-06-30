@@ -67,20 +67,53 @@ m_trap_vector:
 	li		t1, 0x40000
 	mul		t1, t1, a2
 	sub		sp, sp, t1
-	li		t0, 2
-	csrc	sscratch, t0
 	call	m_trap
 	# When we get here, we've returned from m_trap, restore registers
 	# and return.
 	# m_trap will return the return address via a0.
 
 	sfence.vma
-	li		t0, 2
-	csrs	sscratch, t0
 	csrw	mepc, a0
 
 	# Now load the trap frame back into t6
 	csrr	t6, mscratch
+
+	.set	i, 0
+	.rept	32
+		load_fp %i
+		.set i, i+1
+	.endr
+	# Restore all GP registers
+	.set	i, 0
+	.rept	32
+		load_gp %i
+		.set	i, i+1
+	.endr
+
+	mret
+
+.global start_kernel_process
+start_kernel_process:
+	sfence.vma
+	mv		t6, a0
+	ld		t0, 512(t6)
+	csrw 	satp, t0
+	ld		t1, 520(t6)
+	csrw 	mepc, t1
+
+	la		t2, m_trap_vector
+	csrw	mtvec, t2
+	la		t2, s_trap_vector
+	csrw	stvec, t2
+	li		t3, 1 << 5 | 1 << 13 | 1 << 11 | 1 << 1
+	csrw	mstatus, t3
+	li		t3, 1 << 1 | 1 << 13 | 1 << 5
+	csrw	sstatus, t3
+	li		t3, 0x222
+	csrw	mideleg, t3
+	csrw	sie, t3
+	li		t3, 0xe5ff
+	csrw	medeleg, t3
 
 	.set	i, 0
 	.rept	32
@@ -110,78 +143,4 @@ make_syscall:
 make_syscall_long:
 	ecall
 	ret
-
-# a0: *mut Environment
-.global switch_user_process
-switch_user_process:
-	sfence.vma
-	li		t0, 2
-	csrs	sscratch, t0
-	mv		t6, a0
-	ld		t0, 512(t6)
-	csrw 	satp, t0
-	ld		t1, 520(t6)
-	csrw 	mepc, t1
-
-	# li		t1, 0xaaa
-	# csrw	mie, t1
-	la		t2, m_trap_vector
-	csrw	mtvec, t2
-	li		t3, 1 << 4 | 1 << 13
-	csrw	mstatus, t3
-	
-	.set	i, 0
-	.rept	32
-		load_fp %i
-		.set i, i+1
-	.endr
-	
-	# Restore all GP registers
-	.set	i, 1
-	.rept	31
-		load_gp %i
-		.set	i, i+1
-	.endr
-
-	mret
-
-.global switch_kernel_process
-switch_kernel_process:
-	sfence.vma
-	li		t0, 2
-	csrs	sscratch, t0
-	mv		t6, a0
-	ld		t0, 512(t6)
-	csrw 	satp, t0
-	ld		t1, 520(t6)
-	csrw 	mepc, t1
-
-	# li		t1, 0xaaa
-	# csrw	mie, t1
-	la		t2, m_trap_vector
-	csrw	mtvec, t2
-	li		t3, 1 << 5 | 1 << 13 | 1 << 11
-	csrw	mstatus, t3
-	
-	.set	i, 0
-	.rept	32
-		load_fp %i
-		.set i, i+1
-	.endr
-	
-	# Restore all GP registers
-	.set	i, 1
-	.rept	31
-		load_gp %i
-		.set	i, i+1
-	.endr
-
-	mret
-
-test:
-	li a0, 1
-	ecall
-1:
-	wfi
-	j 1b
 

@@ -3,12 +3,13 @@
 //!
 //! 2020年11月 zg
 
+
 pub mod device;
 pub mod input_buffer;
 pub mod config;
 pub mod disk_cache;
+pub mod ip;
 
 pub fn init() {
     device::init();
-    disk_cache::init();
 }

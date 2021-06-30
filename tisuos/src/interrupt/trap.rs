@@ -49,6 +49,7 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
     }
 
     let num = cause & 0xfff;
+    let mut epc = env.epc;
 
     if sync {
         if num != 8 && num != 9 && num != 11 && num != STORE_PAGE_FAULT && num != LOAD_PAGE_FAULT {
@@ -70,28 +71,16 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
             },
             BREAKPOINT => {
                 println!("Breakpoint");
-                env.epc += 2;
+                epc += 2;
             }
             LOAD_ACCESS_FAULT => panic!("Load access fault"),
             STORE_ADDRESS_MISALIGNED => panic!("Store address misalign"),
             STORE_ACCESS_FAULT => panic!("Store access fault"),
             MACHINE_ENVIRONMENT_CALL => {
-                env.epc += 4;
+                epc += 4;
             },
             SUPERVISOR_ENVIRONMENT_CALL|USER_ENVIRONMENT_CALL=> {
-                match syscall::handler(env) {
-                    syscall::SyscallResult::Schedule(_) => {
-                        let mgr = get_task_mgr().unwrap();
-                        env.epc += 4;
-                        mgr.schedule(env);
-                        write_satp(0);
-                        env.epc = waiting as usize;
-                    },
-                    syscall::SyscallResult::Normal(rt) => {
-                        env.regs[Register::A0.val()] = rt;
-                        env.epc += 4;
-                    },
-                }
+                epc = msyscall::handler(env);
             }
             INSTRUCTION_PAGE_FAULT => instruction_page_fault(env, mtval),
             LOAD_PAGE_FAULT => load_page_fault(status, mtval, env),
@@ -104,29 +93,38 @@ extern "C" fn m_trap(env:&mut Environment, cause:usize,
             // 软件中断
             SUPERVISOR_SOFTWARE => println!("supervisor software"),
             MACHINE_SOFTWARE => {
-                software::inactivate(hartid);
-                get_task_mgr().unwrap().schedule(env);
-                write_satp(0);
-                env.epc = waiting as usize;
+                software(env)
             },
             SUPERVISOR_TIMER => println!("supervisor timer interrupt"),
-            MACHINE_TIMER => {
-                timer::set_next_timer();
-                activate_hart();
-                get_task_mgr().unwrap().schedule(env);
-                write_satp(0);
-                env.epc = waiting as usize;
-            },
+            MACHINE_TIMER => timer(env),
             SUPERVISOR_EXTERNAL => println!("supervisor external"),
             MACHINE_EXTERNAL => {
+                // println!("before plic mip {:x}", riscv64::mip::read());
+                // get_task_mgr().unwrap().print();
                 plic::handler();
+                // println!("after plic mip {:x}", riscv64::mip::read());
             }
             _ => {
                 panic!("unknown interrupt number: {:016x}", num);
             }
         }
     }
-    env.epc
+    epc
+}
+
+fn timer(_env:&mut Environment) {
+    activate_hart();
+    riscv64::mip::set(riscv64::STIP);
+    riscv64::mie::clear(riscv64::MTIE);
+}
+
+fn software(env:&mut Environment) {
+    software::inactivate(env.hartid);
+    riscv64::mip::set(riscv64::SSIP);
+    riscv64::mie::clear(riscv64::MSIE);
+    if riscv64::mstatus::mpp() > 1 {
+        riscv64::mstatus::clear(1 << 12);
+    }
 }
 
 fn illegal_instruction(env:&mut Environment, mtval : usize) {
@@ -171,10 +169,10 @@ fn load_page_fault(status : usize, mtval : usize, env:&mut Environment) {
     let id =mgr.get_current_task(env.hartid).unwrap().0.tid;
     if mgr.expand_stack(id).is_err() {
         println!("into m_trap hartid: {:x}, status: {:x}, epc: {:x}, sp: {:x} st:{:x} ed:{:x},
-            satp {:x}, mscratch {:x}, mtval {:x}",
+            satp {:x}, mscratch {:x}, mtval {:x} sscratch {:x}",
             env.hartid, status, env.epc, env.regs[Register::SP.val()],
             unsafe {KERNEL_STACK_START}, unsafe {KERNEL_STACK_END}, env.satp,
-            (env as *const Environment) as usize, mtval);
+            (env as *const Environment) as usize, mtval, riscv64::sscratch::read());
         let (e, _) = get_task_mgr().unwrap().get_current_task(env.hartid).unwrap();
         if e.is_kernel {
             panic!("pid {} tid {} load page fault", e.pid, e.tid);
@@ -215,6 +213,6 @@ fn drop_task(id:usize, env:&mut Environment) {
     env.epc = waiting as usize;
 }
 
-use crate::{interrupt::{environment::Register, software}, libs::cpu::write_satp, memory::{config::{KERNEL_STACK_END, KERNEL_STACK_START, PAGE_SIZE}, map::SATP}, task::get_task_mgr};
+use crate::{interrupt::{environment::Register, msyscall, software}, libs::cpu::write_satp, memory::{config::{KERNEL_STACK_END, KERNEL_STACK_START, PAGE_SIZE}, map::SATP}, task::get_task_mgr};
 use crate::{plic, cpu};
-use super::{environment::Environment, syscall, timer};
+use super::{environment::Environment};

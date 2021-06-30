@@ -69,6 +69,8 @@ impl Thread {
         env.epc = src_th.info.env.epc + 4;
         env.regs[Register::SP.val()] = stack_top -
             (src_th.info.stack_top as usize - src_th.info.env.regs[Register::SP.val()]);
+        println!("sp {:x} st {:x} {:x} {:x}", env.regs[Register::SP.val()],
+            stack_top, src_th.info.stack_top as usize, src_th.info.env.regs[Register::SP.val()]);
         env.regs[Register::A0.val()] = 0;
         Some(Self{
             info : ExecutionInfo{
