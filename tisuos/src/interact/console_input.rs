@@ -36,12 +36,20 @@ macro_rules! console {
 }
 
 pub fn output_handler() {
-    // let uart = Uart::new();
     unsafe {
         loop {
             asm!("wfi");
             while let Some(c) = pop_output() {
-                print!("{}", c);
+                let cc = c as u8;
+                match cc {
+                    10 | 13 => println!(),
+                    127 => {
+                        print!("{}", 8 as char);
+                        print!(" ");
+                        print!("{}", 8 as char);
+                    }
+                    _ => print!("{}", c),
+                }
             }
         }
     }
