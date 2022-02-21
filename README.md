@@ -2,8 +2,6 @@
 
 [![](https://img.shields.io/github/license/belowthetree/TisuOS)](./LICENSE)  [![](https://img.shields.io/badge/english-readme-blue)](./README-EN.md)
 
-**QQ交流群号：961871659**
-
 太素OS是一个用 Rust 编写的基于 RISCV 架构的操作系统，主要用于教学目的，为初学者提供参考。
 
 ![](图/系统截图.jpg)
