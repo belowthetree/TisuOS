@@ -3,6 +3,7 @@
 //! 2021年4月30日 zg
 
 use core::panic::PanicInfo;
+
 #[lang = "eh_personality"] extern fn eh_personality() {}
 
 #[panic_handler]
@@ -25,3 +26,4 @@ extern "C" fn abort() -> !{
         }
     }
 }
+use core::arch::asm;

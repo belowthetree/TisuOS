@@ -184,7 +184,6 @@ impl Drop for Window {
 use core::cmp::max;
 
 use crate::{libs::{shape::{Area, Position, Vector}, syscall::kill}, task::get_task_mgr};
-// use alloc::{prelude::v1::*};
 use super::{content::{Content, ContentType}, headbar::{HEADBAR_HEIGHT, Headbar},
     keyboard::{KeyboardEvent, KeyboardEventType}, mouse::{MouseEvent, MouseEventInfo, MouseEventType},
     plane::{PlaneEvent}};

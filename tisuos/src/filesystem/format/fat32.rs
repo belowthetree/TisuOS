@@ -634,4 +634,6 @@ use crate::{
     virtio::disk_cache::{sync_read_buffer, sync_write_buffer}
 };
 use memory::block::Block;
-use alloc::{prelude::v1::*};
+use crate::alloc::string::ToString;
+use alloc::vec::Vec;
+use alloc::string::String;

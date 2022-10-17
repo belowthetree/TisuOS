@@ -205,7 +205,11 @@ pub fn run() {
 
 use core::mem::size_of;
 
-use alloc::prelude::v1::*;
+
 use tisu_driver::{Pixel};
 use tisu_fs::{DirItemType, Directory, FileFlag, SystemOp};
 use crate::{console, filesystem::{self, FileInfo, elf::ELF, get_system, pop_input}, libs::{str::{convert_to_usize, from_ptr}, syscall::{directory_info, draw_rect, exec, file_info, free, list_thread, open, read, wait}}, memory::block::Block, virtio::{device::get_device, ip::Ip}};
+use crate::alloc::string::ToString;
+use alloc::vec::Vec;
+use alloc::string::String;
+use core::arch::asm;

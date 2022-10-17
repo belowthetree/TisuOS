@@ -2,10 +2,12 @@
 //! 2021年1月6日 zg
 
 #![allow(dead_code)]
-use alloc::prelude::v1::*;
+
 use tisu_driver::Pixel;
 
 use super::str::to_char_slice;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 extern "C" {
     fn make_syscall(num : usize, arg1 : usize, arg2 : usize, arg3 : usize, arg4 : usize) -> usize;

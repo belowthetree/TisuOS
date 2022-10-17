@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
-use alloc::prelude::v1::*;
+use alloc::vec::Vec;
+
+use alloc::string::String;
 
 pub fn slice_to_string(s : &[u8])->String {
     let mut v = Vec::new();

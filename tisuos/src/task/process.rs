@@ -3,8 +3,6 @@
 //!
 //! 2020年12月12日 zg
 
-use alloc::{prelude::v1::*};
-
 pub static mut PID_CNT : AtomCounter = AtomCounter::new();
 pub const MAX_HEAP_SIZE : usize = PAGE_SIZE * 1024 * 4;
 
@@ -163,5 +161,7 @@ pub fn init_process(){
 extern crate alloc;
 use crate::{desktop::plane::Plane, filesystem, interact::{console_input::output_handler, console_shell}, interrupt::{environment::Environment, timer}, libs::syscall::{branch, fork}, memory::{Area, ProgramArea, config::{MEMORY_END, PAGE_SIZE}, heap_memory::TaskHeap, map::SATP}, virtio::{device::gpu_support, disk_cache}};
 
+use alloc::vec::Vec;
 use super::{resource::Resource, task_info::{ProgramInfo, TaskState}};
 use tisu_sync::AtomCounter;
+use core::arch::asm;

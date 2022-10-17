@@ -161,4 +161,7 @@ pub fn char_to_str(cs : &[char])->String {
     rt
 }
 
-use alloc::prelude::v1::*;
+
+use crate::alloc::string::ToString;
+use alloc::string::String;
+use alloc::vec::Vec;

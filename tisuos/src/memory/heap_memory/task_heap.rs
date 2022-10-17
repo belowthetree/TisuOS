@@ -4,8 +4,8 @@
 //!
 //! 2021年4月29日 zg
 
-use alloc::prelude::v1::*;
 
+use alloc::vec::Vec;
 use crate::{memory::map::SATP, task::process::MAX_HEAP_SIZE};
 
 use super::heap_pool::HeapPool;

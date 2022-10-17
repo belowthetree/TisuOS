@@ -1,6 +1,7 @@
 use alloc::collections::BTreeMap;
-use alloc::prelude::v1::*;
+
 use fs_format::{BMP, Image};
+use alloc::string::String;
 
 use super::io::read;
 

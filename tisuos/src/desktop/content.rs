@@ -200,9 +200,10 @@ impl Content {
 use core::cmp::min;
 
 use crate::{filesystem::{get_system, io::enter, pop_task_out, push_task_in, request}, graphic::canvas::texblock::TexBlock, libs::{shape::Position, syscall::exec}, task::get_task_mgr};
-use alloc::prelude::v1::*;
+
 use tisu_fs::{Directory, SystemOp};
 use crate::{graphic::canvas::{grid::Grid}, libs::{font::{FONT_HEIGHT, FONT_WIDTH}, graphic::Pixel, shape::{Vector}}};
 
 use super::mouse::MouseEvent;
-
+use crate::alloc::string::ToString;
+use alloc::string::String;

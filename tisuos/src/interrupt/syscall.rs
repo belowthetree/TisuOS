@@ -446,11 +446,12 @@ fn exec(env : &Environment)->usize {
 
 use core::{mem::size_of, ptr::{slice_from_raw_parts, slice_from_raw_parts_mut}};
 
-use alloc::prelude::v1::*;
+
 use tisu_driver::{Pixel, Rect};
 use tisu_fs::{FileFlag, SystemOp};
 use crate::{filesystem::{DirectoryInfo, FileInfo, elf::{ELF, ElfManager}, get_system, search_system, syscall_io::{read, write}}, libs::{str::{char_to_str, convert_to_usize, from_ptr, write_str}}, memory::{ProgramArea, block::Block}, virtio::{device::{get_device, gpu_support, invalid},
     input_buffer::{get_key_press, get_key_release, get_mouse_x, get_mouse_y, get_scroll}}};
 use crate::task::get_task_mgr;
-
 use super::{environment::{Environment, Register}, timer};
+use crate::alloc::string::ToString;
+use core::arch::asm;

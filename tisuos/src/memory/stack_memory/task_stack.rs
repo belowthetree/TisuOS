@@ -3,8 +3,9 @@
 //!
 //! 2021年4月29日 zg
 
-use alloc::prelude::v1::*;
+
 use tisu_memory::MemoryOp;
+use alloc::vec::Vec;
 
 use crate::memory::{config::PAGE_SIZE, get_manager, map::SATP};
 

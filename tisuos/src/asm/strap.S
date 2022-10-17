@@ -1,3 +1,4 @@
+.align 4
 .global s_trap_vector
 s_trap_vector:
 	csrw	satp, zero

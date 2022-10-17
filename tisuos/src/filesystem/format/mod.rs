@@ -2,12 +2,13 @@
 //! 
 //! 2021年1月31日 zg
 
-use alloc::{prelude::v1::*, sync::Arc};
+use alloc::{sync::Arc};
 use tisu_fs::{DiskInfo, FileSystem, Leaf, LeafType};
 use crate::virtio::disk_cache::get_cache;
 use self::fat32::{Attribute, FATManger};
-
+use alloc::vec::Vec;
 use super::syscall_io::get_id_mgr;
+use alloc::string::String;
 
 
 pub mod fat32;

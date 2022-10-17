@@ -6,7 +6,7 @@
 use crate::{interrupt::environment::Environment, memory::ProgramArea};
 use tisu_sync::ContentMutex;
 use super::{process::Process, require::{TaskComplexOp, TaskPoolBasicOp, TaskPoolOp, TaskResourceOp, TaskScheduleOp}, task_info::{ExecutionInfo, TaskState}, thread::Thread};
-use alloc::{prelude::v1::*};
+use alloc::vec::Vec;
 use alloc::collections::BTreeMap;
 
 pub struct TaskPool {

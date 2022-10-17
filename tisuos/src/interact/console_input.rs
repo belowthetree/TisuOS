@@ -36,20 +36,12 @@ macro_rules! console {
 }
 
 pub fn output_handler() {
+    // let uart = Uart::new();
     unsafe {
         loop {
             asm!("wfi");
             while let Some(c) = pop_output() {
-                let cc = c as u8;
-                match cc {
-                    10 | 13 => println!(),
-                    127 => {
-                        print!("{}", 8 as char);
-                        print!(" ");
-                        print!("{}", 8 as char);
-                    }
-                    _ => print!("{}", c),
-                }
+                print!("{}", c);
             }
         }
     }
@@ -57,3 +49,5 @@ pub fn output_handler() {
 
 // use super::shell;
 use crate::{filesystem::{pop_output, push_input, push_output}, uart::Uart};
+
+use core::arch::asm;

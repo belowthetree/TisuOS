@@ -14,6 +14,7 @@ use tisu_fs::{FileSystem, IdManager, SystemOp};
 pub use fs_info::*;
 pub use stdio::*;
 pub use format::elf;
+use alloc::vec::Vec;
 pub use image_pool::request;
 
 /// 一个文件系统对应一个磁盘
@@ -85,5 +86,5 @@ pub fn search_system(id : usize)->Option<&'static mut impl SystemOp> {
 }
 
 use crate::{filesystem::format::{fat32::FATManger, tianmu::TianMu}, virtio::device::get_device};
-use alloc::prelude::v1::*;
+
 use self::{format::{BlockType, DiskType}};

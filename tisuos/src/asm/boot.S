@@ -13,6 +13,11 @@ _start:
 	# 据手册说明，GP 寄存器用来访问它周围的内存，看起来可以加速访问呢
 	la		gp, _global_pointer
 .option pop
+	# PMP 配置，默认开启所有地址访问权限
+	li		t0, 0xffffffffffffffff
+	csrw	pmpaddr0, t0
+	li		t0, 0b10001111
+	csrw	pmpcfg0, t0
 	# 让其它（非0号）硬件线程挂起，跳转至 3
 	csrr	t0, mhartid
 	csrw	satp, zero

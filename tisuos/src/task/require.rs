@@ -1,7 +1,7 @@
 use crate::{interrupt::environment::Environment, memory::{ProgramArea, block::Block}};
-use alloc::prelude::v1::*;
-use super::task_info::{ExecutionInfo, ProgramInfo};
 
+use super::task_info::{ExecutionInfo, ProgramInfo};
+use alloc::vec::Vec;
 pub trait TaskPoolOp : TaskPoolBasicOp + TaskComplexOp + TaskResourceOp + TaskScheduleOp {}
 
 /// ## 任务池操作要求

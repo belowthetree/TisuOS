@@ -5,7 +5,8 @@
 use core::cmp::{max, min};
 
 use crate::{filesystem::elf::ElfManager, memory::{config::{DATA_START, HEAP_START, KERNEL_PAGE_NUM, MEMORY_START, PAGE_SIZE, RODATA_END}, get_manager, map::SATP}};
-use alloc::prelude::v1::*;
+
+use alloc::vec::Vec;
 use tisu_memory::MemoryOp;
 
 extern "C" {

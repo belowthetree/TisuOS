@@ -2,9 +2,10 @@
 //!
 //! 2021年5月3日 zg
 
-use alloc::prelude::v1::*;
-use tisu_fs::{Directory, SystemOp};
 
+use tisu_fs::{Directory, SystemOp};
+use crate::alloc::string::ToString;
+use alloc::string::String;
 use crate::{libs::str::convert_to_usize, memory::block::Block};
 
 use super::get_system;

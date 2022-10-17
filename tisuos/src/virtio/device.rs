@@ -243,9 +243,11 @@ pub fn invalid(){
 
 use core::ptr::slice_from_raw_parts;
 
-use alloc::prelude::v1::*;
+
 use crate::{filesystem::push_input, memory::{block::Block, get_manager}};
 use super::{config::{HEIGHT, WIDTH}, input_buffer::{add_key_press, add_key_release, add_mouse_x, add_mouse_y, add_scroll}, ip::Ip};
 use virtio_input_decoder::Decoder;
 use tisu_driver::{BlockDriver, DeviceType, Driver, GraphicDriver, Pixel, Rect, VirtHeader, NetDriver};
 use tisu_driver::InterruptOk;
+use alloc::boxed::Box;
+use alloc::vec::Vec;

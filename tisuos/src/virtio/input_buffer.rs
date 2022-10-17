@@ -6,9 +6,10 @@
 
 #![allow(dead_code)]
 
-use alloc::prelude::v1::*;
+
 
 use crate::libs::shape::ScalePoint;
+use alloc::vec::Vec;
 
 const QUEUE_SIZE : usize = 128;
 static mut SCROLL_CUR_IDX : usize = 0;

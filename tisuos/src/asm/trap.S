@@ -92,9 +92,9 @@ m_trap_vector:
 
 	mret
 
+.align 4
 .global start_kernel_process
 start_kernel_process:
-	sfence.vma
 	mv		t6, a0
 	ld		t0, 512(t6)
 	csrw 	satp, t0
@@ -105,9 +105,9 @@ start_kernel_process:
 	csrw	mtvec, t2
 	la		t2, s_trap_vector
 	csrw	stvec, t2
-	li		t3, 1 << 5 | 1 << 13 | 1 << 11 | 1 << 1
+	li		t3, (0b11 << 13) | (1 << 11) | (1 << 7) | (1 << 5)
 	csrw	mstatus, t3
-	li		t3, 1 << 1 | 1 << 13 | 1 << 5
+	li		t3, 0b11 << 13 | 1 << 8 | 1 << 5
 	csrw	sstatus, t3
 	li		t3, 0x222
 	csrw	mideleg, t3

@@ -31,3 +31,4 @@ pub fn write_satp(satp : usize) {
         )
     }
 }
+use core::arch::asm;
